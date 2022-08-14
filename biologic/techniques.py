@@ -1,4 +1,15 @@
+from collections import namedtuple
 import ctypes
+
+from biologic import constants, exceptions, structures
+
+DataField = namedtuple('DataField', ['name', 'type'])
+
+TechniqueArgument = namedtuple(
+    'TechniqueArgument',
+    ['label', 'type', 'value', 'check', 'check_argument']
+    )
+
 
 class Technique(object):
     """Base class for techniques
@@ -100,9 +111,10 @@ class Technique(object):
             # value
             if isinstance(arg.type, dict):
                 value = ctypes.reverse_dict(arg.type)[arg.value]
-                param = TECCParam()
+                param = structures.TECCParam()
                 instrument.define_integer_parameter(
-                    arg.label, value, 0, param)
+                    arg.label, value, 0, param
+                    )
                 constructed_args.append(param)
                 continue
 
@@ -113,11 +125,12 @@ class Technique(object):
                 # is named something like defined_bool_parameter
                 conversion_function = getattr(
                     instrument,
-                    'define_{}_parameter'.format(stripped_type))
+                    'define_{}_parameter'.format(stripped_type)
+                    )
             except AttributeError:
                 message = 'Unable to find parameter definitions function for '\
                           'type: {}'.format(stripped_type)
-                raise ECLibCustomException(message, -10010)
+                raise exceptions.ECLibCustomException(message, -10010)
 
             # If the parameter is not a multistep paramter, put the value in a
             # list so we can iterate over it
@@ -129,18 +142,22 @@ class Technique(object):
             # Iterate over all the steps for the parameter (for most will just
             # be 1)
             for index in range(min(step_number, len(values))):
-                param = TECCParam()
+                param = structures.TECCParam()
                 try:
-                    conversion_function(arg.label, values[index],
-                                        index, param)
-                except ECLibError:
+                    conversion_function(
+                        arg.label, values[index], index, param
+                        )
+                except exceptions.ECLibError:
                     message = '{} is not a valid value for conversion to '\
                               'type {} for argument \'{}\''.format(
                                   values[index], stripped_type, arg.label)
-                    raise ECLibCustomException(message, -10011)
+                    raise exceptions.ECLibCustomException(
+                        message, -10011
+                        )
                 constructed_args.append(param)
 
-        self._c_args = (TECCParam * len(constructed_args))()
+        self._c_args = (structures.TECCParam *
+                        len(constructed_args))()
         for index, param in enumerate(constructed_args):
             self._c_args[index] = param
 
@@ -164,7 +181,9 @@ class Technique(object):
                     message = '{} is not among the valid values for \'{}\'. '\
                               'Valid values are: {}'.format(
                                   value, arg.label, arg.check_argument)
-                    raise ECLibCustomException(message, -10000)
+                    raise exceptions.ECLibCustomException(
+                        message, -10000
+                        )
             return
 
         # Perform bounds check, if any
@@ -174,25 +193,30 @@ class Technique(object):
                     message = 'Value {} for parameter \'{}\' failed '\
                               'check >={}'.format(
                                   value, arg.label, arg.check_argument)
-                    raise ECLibCustomException(message, -10001)
+                    raise exceptions.ECLibCustomException(
+                        message, -10001
+                        )
             return
 
         # Perform in two parameter range check: A < value < B
         if arg.check == 'in_float_range':
             for value in values:
                 if not arg.check_argument[
-                        0] <= value <= arg.check_argument[1]:
+                    0] <= value <= arg.check_argument[1]:
                     message = 'Value {} for parameter \'{}\' failed '\
                               'check between {} and {}'.format(
                                   value, arg.label,
                                   *arg.check_argument
                               )
-                    raise ECLibCustomException(message, -10002)
+                    raise exceptions.ECLibCustomException(
+                        message, -10002
+                        )
             return
 
         message = 'Unknown technique parameter check: {}'.format(
-            arg.check)
-        raise ECLibCustomException(message, -10002)
+            arg.check
+            )
+        raise exceptions.ECLibCustomException(message, -10002)
 
 
 # Section 7.2 in the specification
@@ -206,12 +230,21 @@ class OCV(Technique):
 
     #: Data fields definition
     data_fields = {
-        'vmp3': [DataField('Ewe', c_float), DataField('Ece', c_float)],
-        'sp300': [DataField('Ewe', c_float)],
-    }
+        'vmp3':
+            [
+                DataField('Ewe', ctypes.c_float),
+                DataField('Ece', ctypes.c_float)
+                ],
+        'sp300': [DataField('Ewe', ctypes.c_float)],
+        }
 
-    def __init__(self, rest_time_T=10.0, record_every_dE=10.0,
-                 record_every_dT=0.1, E_range='KBIO_ERANGE_AUTO'):
+    def __init__(
+        self,
+        rest_time_T=10.0,
+        record_every_dE=10.0,
+        record_every_dT=0.1,
+        E_range='KBIO_ERANGE_AUTO'
+        ):
         """Initialize the OCV technique
         Args:
             rest_time_t (float): The amount of time to rest (s)
@@ -221,14 +254,20 @@ class OCV(Technique):
                 :data:`E_RANGES` module variable for possible values
         """
         args = (
-            TechniqueArgument('Rest_time_T', 'single', rest_time_T, '>=', 0),
-            TechniqueArgument('Record_every_dE', 'single', record_every_dE,
-                              '>=', 0),
-            TechniqueArgument('Record_every_dT', 'single', record_every_dT,
-                              '>=', 0),
-            TechniqueArgument('E_Range', E_RANGES, E_range,
-                              'in', E_RANGES.values()),
-        )
+            TechniqueArgument(
+                'Rest_time_T', 'single', rest_time_T, '>=', 0
+                ),
+            TechniqueArgument(
+                'Record_every_dE', 'single', record_every_dE, '>=', 0
+                ),
+            TechniqueArgument(
+                'Record_every_dT', 'single', record_every_dT, '>=', 0
+                ),
+            TechniqueArgument(
+                'E_Range', constants.VoltageRange, E_range, 'in',
+                constants.Erange.values()
+                ),
+            )
         super(OCV, self).__init__(args, 'ocv.ecc')
 
 
@@ -245,26 +284,29 @@ class CV(Technique):
 
     #:Data fields definition
     data_fields = {
-        'common': [
-            DataField('Ec', ctypes.c_float),
-            DataField('I', ctypes.c_float),
-            DataField('Ewe', ctypes.c_float),
-            DataField('cycle', ctypes.c_uint32),
-        ]
-    }
+        'common':
+            [
+                DataField('Ec', ctypes.c_float),
+                DataField('I', ctypes.c_float),
+                DataField('Ewe', ctypes.c_float),
+                DataField('cycle', ctypes.c_uint32),
+                ]
+        }
 
-    def __init__(self,
-                 vs_initial,
-                 voltage_step,
-                 scan_rate,
-                 record_every_dE=0.1,
-                 average_over_dE=True,
-                 N_cycles=0,
-                 begin_measuring_I=0.5,
-                 end_measuring_I=1.0,
-                 I_range='KBIO_IRANGE_AUTO',
-                 E_range='KBIO_ERANGE_2_5',
-                 bandwidth='KBIO_BW_5'):
+    def __init__(
+        self,
+        vs_initial,
+        voltage_step,
+        scan_rate,
+        record_every_dE=0.1,
+        average_over_dE=True,
+        N_cycles=0,
+        begin_measuring_I=0.5,
+        end_measuring_I=1.0,
+        I_range='KBIO_IRANGE_AUTO',
+        E_range='KBIO_ERANGE_2_5',
+        bandwidth='KBIO_BW_5'
+        ):
         r"""Initialize the CV technique::
          E_we
          ^
@@ -303,39 +345,61 @@ class CV(Technique):
         for input_name in ('vs_initial', 'voltage_step', 'scan_rate'):
             if len(locals()[input_name]) != 5:
                 message = 'Input \'{}\' must be of length 5, not {}'.format(
-                    input_name, len(locals()[input_name]))
+                    input_name, len(locals()[input_name])
+                    )
                 raise ValueError(message)
+
+    # TechniqueArgument = namedtuple(
+    # 'TechniqueArgument',
+    # ['label', 'type', 'value', 'check', 'check_argument'])
+
         args = (
-            TechniqueArgument('vs_initial', '[bool]', vs_initial,
-                              'in', [True, False]),
-            TechniqueArgument('Voltage_step', '[single]',
-                              voltage_step, None, None),
-            TechniqueArgument('Scan_Rate', '[single]', scan_rate,
-                              '>=', 0.0),
-            TechniqueArgument('Scan_number', 'integer', 2, None,
-                              None),
-            TechniqueArgument('Record_every_dE', 'single',
-                              record_every_dE, '>=', 0.0),
-            TechniqueArgument('Average_over_dE', 'bool',
-                              average_over_dE, 'in', [True, False]),
-            TechniqueArgument('N_Cycles', 'integer', N_cycles, '>=',
-                              0),
-            TechniqueArgument('Begin_measuring_I', 'single',
-                              begin_measuring_I, 'in_float_range',
-                              (0.0, 1.0)),
-            TechniqueArgument('End_measuring_I', 'single',
-                              end_measuring_I, 'in_float_range',
-                              (0.0, 1.0)),
-            TechniqueArgument('I_Range', I_RANGES, I_range, 'in',
-                              I_RANGES.values()),
-            TechniqueArgument('E_Range', E_RANGES, E_range, 'in',
-                              E_RANGES.values()),
-            TechniqueArgument('Bandwidth', BANDWIDTHS, bandwidth,
-                              'in', BANDWIDTHS.values()),
-        )
+            TechniqueArgument(
+                'vs_initial', '[bool]', vs_initial, 'in',
+                [True, False]
+                ),
+            TechniqueArgument(
+                'Voltage_step', '[single]', voltage_step, None, None
+                ),
+            TechniqueArgument(
+                'Scan_Rate', '[single]', scan_rate, '>=', 0.0
+                ),
+            TechniqueArgument(
+                'Scan_number', 'integer', 2, None, None
+                ),
+            TechniqueArgument(
+                'Record_every_dE', 'single', record_every_dE, '>=',
+                0.0
+                ),
+            TechniqueArgument(
+                'Average_over_dE', 'bool', average_over_dE, 'in',
+                [True, False]
+                ),
+            TechniqueArgument(
+                'N_Cycles', 'integer', N_cycles, '>=', 0
+                ),
+            TechniqueArgument(
+                'Begin_measuring_I', 'single', begin_measuring_I,
+                'in_float_range', (0.0, 1.0)
+                ),
+            TechniqueArgument(
+                'End_measuring_I', 'single', end_measuring_I,
+                'in_float_range', (0.0, 1.0)
+                ),
+            TechniqueArgument(
+                'I_Range', constants.CurrentRange, I_range, 'in',
+                constants.CurrentRange
+                ),
+            TechniqueArgument(
+                'E_Range', constants.VoltageRange, E_range, 'in',
+                constants.VoltageRange
+                ),
+            TechniqueArgument(
+                'Bandwidth', constants.Bandwidth, bandwidth, 'in',
+                constants.Bandwidth
+                ),
+            )
         super(CV, self).__init__(args, 'cv.ecc')
-
-
 
 
 # Section 7.5 in the specification
@@ -350,18 +414,26 @@ class CP(Technique):
 
     #: Data fields definition
     data_fields = {
-        'common': [
-            DataField('Ewe', ctypes.c_float),
-            DataField('I', ctypes.c_float),
-            DataField('cycle', ctypes.c_uint32),
-        ]
-    }
+        'common':
+            [
+                DataField('Ewe', ctypes.c_float),
+                DataField('I', ctypes.c_float),
+                DataField('cycle', ctypes.c_uint32),
+                ]
+        }
 
-    def __init__(self, current_step=(50E-6,), vs_initial=(False,),
-                 duration_step=(10.0,),
-                 record_every_dT=0.1, record_every_dE=0.001,
-                 N_cycles=0, I_range='KBIO_IRANGE_100uA',
-                 E_range='KBIO_ERANGE_2_5', bandwidth='KBIO_BW_5'):
+    def __init__(
+        self,
+        current_step=(50E-6,),
+        vs_initial=(False,),
+        duration_step=(10.0,),
+        record_every_dT=0.1,
+        record_every_dE=0.001,
+        N_cycles=0,
+        I_range='KBIO_IRANGE_100uA',
+        E_range='KBIO_ERANGE_2_5',
+        bandwidth='KBIO_BW_5'
+        ):
         """Initialize the CP technique
         NOTE: The current_step, vs_initial and duration_step must be a list or
         tuple with the same length.
@@ -386,32 +458,47 @@ class CP(Technique):
         Raises:
             ValueError: On bad lengths for the list arguments
         """
-        if not len(current_step) == len(vs_initial) == len(duration_step):
+        if not len(current_step) == len(vs_initial
+                                       ) == len(duration_step):
             message = 'The length of current_step, vs_initial and '\
                       'duration_step must be the same'
             raise ValueError(message)
 
         args = (
-            TechniqueArgument('Current_step', '[single]', current_step,
-                              None, None),
-            TechniqueArgument('vs_initial', '[bool]', vs_initial,
-                              'in', [True, False]),
-            TechniqueArgument('Duration_step', '[single]', duration_step,
-                              '>=', 0),
-            TechniqueArgument('Step_number', 'integer', len(current_step),
-                              'in', range(99)),
-            TechniqueArgument('Record_every_dT', 'single', record_every_dT,
-                              '>=', 0),
-            TechniqueArgument('Record_every_dE', 'single', record_every_dE,
-                              '>=', 0),
-            TechniqueArgument('N_Cycles', 'integer', N_cycles, '>=', 0),
-            TechniqueArgument('I_Range', I_RANGES, I_range,
-                              'in', I_RANGES.values()),
-            TechniqueArgument('E_Range', E_RANGES, E_range,
-                              'in', E_RANGES.values()),
-            TechniqueArgument('Bandwidth', BANDWIDTHS, bandwidth,
-                              'in', BANDWIDTHS.values()),
-        )
+            TechniqueArgument(
+                'Current_step', '[single]', current_step, None, None
+                ),
+            TechniqueArgument(
+                'vs_initial', '[bool]', vs_initial, 'in',
+                [True, False]
+                ),
+            TechniqueArgument(
+                'Duration_step', '[single]', duration_step, '>=', 0
+                ),
+            TechniqueArgument(
+                'Step_number', 'integer', len(current_step), 'in',
+                range(99)
+                ),
+            TechniqueArgument(
+                'Record_every_dT', 'single', record_every_dT, '>=', 0
+                ),
+            TechniqueArgument(
+                'Record_every_dE', 'single', record_every_dE, '>=', 0
+                ),
+            TechniqueArgument(
+                'N_Cycles', 'integer', N_cycles, '>=', 0
+                ),
+            TechniqueArgument(
+                'I_Range', I_RANGES, I_range, 'in', I_RANGES.values()
+                ),
+            TechniqueArgument(
+                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
+                ),
+            TechniqueArgument(
+                'Bandwidth', BANDWIDTHS, bandwidth, 'in',
+                BANDWIDTHS.values()
+                ),
+            )
         super(CP, self).__init__(args, 'cp.ecc')
 
 
@@ -427,16 +514,26 @@ class CA(Technique):
 
     #:Data fields definition
     data_fields = {
-        'common': [DataField('Ewe', ctypes.c_float),
-                   DataField('I', ctypes.c_float),
-                   DataField('cycle', ctypes.c_uint32)]
-    }
+        'common':
+            [
+                DataField('Ewe', ctypes.c_float),
+                DataField('I', ctypes.c_float),
+                DataField('cycle', ctypes.c_uint32)
+                ]
+        }
 
-    def __init__(self, voltage_step=(0.35,), vs_initial=(False,),
-                 duration_step=(10.0,),
-                 record_every_dT=0.1, record_every_dI=5E-6,
-                 N_cycles=0, I_range='KBIO_IRANGE_AUTO',
-                 E_range='KBIO_ERANGE_2_5', bandwidth='KBIO_BW_5'):
+    def __init__(
+        self,
+        voltage_step=(0.35,),
+        vs_initial=(False,),
+        duration_step=(10.0,),
+        record_every_dT=0.1,
+        record_every_dI=5E-6,
+        N_cycles=0,
+        I_range='KBIO_IRANGE_AUTO',
+        E_range='KBIO_ERANGE_2_5',
+        bandwidth='KBIO_BW_5'
+        ):
         """Initialize the CA technique
         NOTE: The voltage_step, vs_initial and duration_step must be a list or
         tuple with the same length.
@@ -461,30 +558,57 @@ class CA(Technique):
         Raises:
             ValueError: On bad lengths for the list arguments
         """
-        if not len(voltage_step) == len(vs_initial) == len(duration_step):
+        if not len(voltage_step) == len(vs_initial
+                                       ) == len(duration_step):
             message = 'The length of voltage_step, vs_initial and '\
                       'duration_step must be the same'
             raise ValueError(message)
 
         args = (
-            TechniqueArgument('Voltage_step', '[single]', voltage_step,
-                              None, None),
-            TechniqueArgument('vs_initial', '[bool]', vs_initial,
-                              'in', [True, False]),
-            TechniqueArgument('Duration_step', '[single]', duration_step,
-                              '>=', 0.0),
-            TechniqueArgument('Step_number', 'integer', len(voltage_step),
-                              'in', range(99)),
-            TechniqueArgument('Record_every_dT', 'single', record_every_dT,
-                              '>=', 0.0),
-            TechniqueArgument('Record_every_dI', 'single', record_every_dI,
-                              '>=', 0.0),
-            TechniqueArgument('N_Cycles', 'integer', N_cycles, '>=', 0),
-            TechniqueArgument('I_Range', I_RANGES, I_range,
-                              'in', I_RANGES.values()),
-            TechniqueArgument('E_Range', E_RANGES, E_range,
-                              'in', E_RANGES.values()),
-            TechniqueArgument('Bandwidth', BANDWIDTHS, bandwidth, 'in',
-                              BANDWIDTHS.values()),
-        )
+            TechniqueArgument(
+                'Voltage_step', '[single]', voltage_step, None, None
+                ),
+            TechniqueArgument(
+                'vs_initial', '[bool]', vs_initial, 'in',
+                [True, False]
+                ),
+            TechniqueArgument(
+                'Duration_step', '[single]', duration_step, '>=', 0.0
+                ),
+            TechniqueArgument(
+                'Step_number', 'integer', len(voltage_step), 'in',
+                range(99)
+                ),
+            TechniqueArgument(
+                'Record_every_dT', 'single', record_every_dT, '>=',
+                0.0
+                ),
+            TechniqueArgument(
+                'Record_every_dI', 'single', record_every_dI, '>=',
+                0.0
+                ),
+            TechniqueArgument(
+                'N_Cycles', 'integer', N_cycles, '>=', 0
+                ),
+            TechniqueArgument(
+                'I_Range', I_RANGES, I_range, 'in', I_RANGES.values()
+                ),
+            TechniqueArgument(
+                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
+                ),
+            TechniqueArgument(
+                'Bandwidth', BANDWIDTHS, bandwidth, 'in',
+                BANDWIDTHS.values()
+                ),
+            )
         super(CA, self).__init__(args, 'ca.ecc')
+
+
+#:Technique name to technique class translation dict. IMPORTANT. Add newly
+#:implemented techniques to this dictionary
+TechniqueIdentifiers = {
+    'KBIO_TECHID_OCV': OCV,
+    'KBIO_TECHID_CP': CP,
+    'KBIO_TECHID_CA': CA,
+    'KBIO_TECHID_CV': CV
+    }

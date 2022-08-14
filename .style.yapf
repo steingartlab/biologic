@@ -1,0 +1,14 @@
+[style]
+based_on_style = yapf
+spaces_before_comment = 2
+indent_width: 4
+split_before_logical_operator = true
+column_limit = 70
+ALLOW_SPLIT_BEFORE_DEFAULT_OR_NAMED_ASSIGNS = True
+DEDENT_CLOSING_BRACKETS = True
+ALLOW_SPLIT_BEFORE_DICT_VALUE = True
+EACH_DICT_ENTRY_ON_SEPARATE_LINE = True
+FORCE_MULTILINE_DICT = True
+INDENT_CLOSING_BRACKETS = True
+INDENT_BLANK_LINES = False
+BLANK_LINES_AROUND_TOP_LEVEL_DEFINITION = 2
