@@ -1,7 +1,7 @@
 from collections import namedtuple
 import ctypes
 
-from biologic import constants, exceptions, structures
+import constants, exceptions, structures
 
 DataField = namedtuple('DataField', ['name', 'type'])
 

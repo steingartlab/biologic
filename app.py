@@ -18,7 +18,7 @@ app = flask.Flask(__name__)
 
 
 def configure_routes(app):
-    from biologic import potentiostat, technique
+    from biologic import wrapper
 
     @app.route('/')
     def hello_world():
@@ -29,7 +29,7 @@ def configure_routes(app):
         return "Flask BioLogic server running"
 
     # Runs resonance
-    @app.route('/cycle', methods=['POST'])
+    @app.route('/run', methods=['POST'])
     def get_resonance():
         """This is where the magic happens.
         Receives params from pithy, passes them onto the potentiostat,
@@ -38,10 +38,11 @@ def configure_routes(app):
             dict: waveform data
         """
 
-        data = ''
+        params = flask.request.values.to_dict()
+        wrapper.run_ocv()
 
 
-        return json.dumps(data)
+        return json.dumps(params)
 
 
     @app.errorhandler(werkzeug.exceptions.BadRequest)

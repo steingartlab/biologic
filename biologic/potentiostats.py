@@ -2,7 +2,7 @@ import ctypes
 import numpy as np
 import os
 
-from biologic import constants, exceptions, structures
+import constants, exceptions, structures
 
 
 class GeneralPotentiostat(object):
@@ -22,7 +22,7 @@ class GeneralPotentiostat(object):
         type_: str,
         address: str,
         EClib_dll_path:
-        str = 'C:\\EC-Lab Development Package\\EC-Lab Development Package\\EClib64.dll',
+        str = 'C:\EC-Lab Development Package\EC-Lab Development Package\EClib64.dll',
         series: str = 'vmp3'
         ):
         """Initialize the potentiostat driver.
@@ -136,14 +136,17 @@ class GeneralPotentiostat(object):
             ECLibCustomException: If this class does not match the device type.
         """
 
-        address = ctypes.create_string_buffer(self.address)
+        # address = ctypes.create_string_buffer(len(self.address))
+        address = ctypes.c_char_p(self.address.encode())
         self._id = ctypes.c_int32()
         device_info = structures.DeviceInfos()
 
         status = self._eclib.BL_Connect(
-            ctypes.byref(address), timeout, ctypes.byref(self._id),
+            ctypes.byref(address),
+            timeout,
+            ctypes.byref(self._id),
             ctypes.byref(device_info)
-            )
+        )
 
         self.check_eclib_return_code(status)
 
@@ -540,13 +543,14 @@ class GeneralPotentiostat(object):
 
         if error_code < 0:
             message = self.get_error_message(error_code)
+            print(message)
             raise exceptions.ECLibError(message, error_code)
 
 
 class SP150(GeneralPotentiostat):
     """Specific driver for the SP-150 potentiostat"""
 
-    def __init__(self, address, EClib_dll_path=None):
+    def __init__(self, address):
         """Initialize the SP150 potentiostat driver
         See the __init__ method for the GeneralPotentiostat class for an
         explanation of the arguments.
@@ -554,15 +558,14 @@ class SP150(GeneralPotentiostat):
 
         super(SP150, self).__init__(
             type_='KBIO_DEV_SP150',
-            address=address,
-            EClib_dll_path=EClib_dll_path
-            )
+            address=address
+        )
 
 
 class HCP1005(GeneralPotentiostat):
     """Specific driver for the HCP-1005 potentiostat"""
 
-    def __init__(self, address, EClib_dll_path=None):
+    def __init__(self, address):
         """Initialize the HCP-1005 potentiostat driver
         See the __init__ method for the GeneralPotentiostat class for an
         explanation of the arguments.
@@ -570,8 +573,7 @@ class HCP1005(GeneralPotentiostat):
 
         super(HCP1005, self).__init__(
             type_='KBIO_DEV_HCP1005',
-            address=address,
-            EClib_dll_path=EClib_dll_path
+            address=address
             )
 
 
