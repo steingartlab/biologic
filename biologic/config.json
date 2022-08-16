@@ -1,0 +1,6 @@
+{
+    "driver": {
+        "driverpath": "EC-Lab Development Package\\EC-Lab Development Package\\",
+        "example_driver": "blfind64.dll"
+    }
+}

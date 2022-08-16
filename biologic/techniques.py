@@ -1,7 +1,7 @@
 from collections import namedtuple
 import ctypes
 
-import constants, exceptions, structures
+from biologic import constants, exceptions, structures
 
 DataField = namedtuple('DataField', ['name', 'type'])
 
@@ -464,6 +464,7 @@ class CP(Technique):
                       'duration_step must be the same'
             raise ValueError(message)
 
+        # TODO: Edit last three lines
         args = (
             TechniqueArgument(
                 'Current_step', '[single]', current_step, None, None
@@ -489,14 +490,14 @@ class CP(Technique):
                 'N_Cycles', 'integer', N_cycles, '>=', 0
                 ),
             TechniqueArgument(
-                'I_Range', I_RANGES, I_range, 'in', I_RANGES.values()
+                'I_Range', constants.CurrentRange('add'), I_range, 'in', constants.CurrentRange(...).value
                 ),
             TechniqueArgument(
-                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
+                'E_Range', constants.VoltageRange, E_range, 'in', constants.VoltageRange.values()
                 ),
             TechniqueArgument(
-                'Bandwidth', BANDWIDTHS, bandwidth, 'in',
-                BANDWIDTHS.values()
+                'Bandwidth', constants.Bandwidth, bandwidth, 'in',
+                constants.Bandwidth.values()
                 ),
             )
         super(CP, self).__init__(args, 'cp.ecc')

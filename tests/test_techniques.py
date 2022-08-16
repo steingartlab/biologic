@@ -1,2 +1,2 @@
-from biologic import technique
+from biologic import techniques
 
