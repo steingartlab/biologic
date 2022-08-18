@@ -4,7 +4,7 @@ import ctypes
 
 from biologic import constants, exceptions
 
-class KBIOData(object):
+class KBIOData:
     """Class used to represent data obtained with a get_data call
     The data can be obtained as lists of floats through attributes on this
     class. The time is always available through the 'time' attribute. The

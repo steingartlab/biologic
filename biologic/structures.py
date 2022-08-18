@@ -58,10 +58,6 @@ class CurrentValues(ctypes.Structure):
         ('Rcomp', ctypes.c_float),  # R-compenzation (Ohm)
         ('Saturation', ctypes.c_int32),  # E or/and I saturation
         ]
-    # Hack to include the fields names in doc string (and Sphinx documentation)
-    __doc__ += '\n\n    Fields:\n\n' + '\n'.join(
-        ['    * {} {}'.format(*field) for field in _fields_]
-        )
 
 
 class DataInfos(ctypes.Structure):
@@ -88,10 +84,6 @@ class DataInfos(ctypes.Structure):
         ('loop', ctypes.c_int32),  # Loop number
         ('StartTime', ctypes.c_double),  # Start time (s)
         ]
-    # Hack to include the fields names in doc string (and Sphinx documentation)
-    __doc__ += '\n\n    Fields:\n\n' + '\n'.join(
-        ['    * {} {}'.format(*field) for field in _fields_]
-        )
 
 
 class DeviceInfos(ctypes.Structure):
@@ -111,7 +103,7 @@ class DeviceInfos(ctypes.Structure):
     ]
 
 
-class TECCParam(ctypes.Structure):
+class TEccParam(ctypes.Structure):
     """Technique parameter"""
     _fields_ = [
         ('ParamStr', ctypes.c_char * 64),
@@ -119,19 +111,11 @@ class TECCParam(ctypes.Structure):
         ('ParamVal', ctypes.c_int32),
         ('ParamIndex', ctypes.c_int32),
         ]
-    # Hack to include the fields names in doc string (and Sphinx documentation)
-    __doc__ += '\n\n    Fields:\n\n' + '\n'.join(
-        ['    * {} {}'.format(*field) for field in _fields_]
-        )
 
 
-class TECCParams(ctypes.Structure):
+class TEccParams(ctypes.Structure):
     """Technique parameters"""
     _fields_ = [
         ('len', ctypes.c_int32),
-        ('pParams', ctypes.POINTER(TECCParam)),
+        ('pParams', ctypes.POINTER(TEccParam)),
         ]
-    # Hack to include the fields names in doc string (and Sphinx documentation)
-    __doc__ += '\n\n    Fields:\n\n' + '\n'.join(
-        ['    * {} {}'.format(*field) for field in _fields_]
-        )

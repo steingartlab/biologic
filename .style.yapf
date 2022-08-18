@@ -1,7 +1,7 @@
 [style]
 based_on_style = yapf
 spaces_before_comment = 2
-indent_width: 4
+indent_width = 4
 split_before_logical_operator = true
 column_limit = 70
 ALLOW_SPLIT_BEFORE_DEFAULT_OR_NAMED_ASSIGNS = True

@@ -1,7 +1,13 @@
 from collections import namedtuple
 import ctypes
+import json
 
 from biologic import constants, exceptions, structures
+
+with open('biologic/config.json') as f:
+    settings = json.load(f)
+
+driverpath = settings['driver']['driverpath']
 
 DataField = namedtuple('DataField', ['name', 'type'])
 
@@ -11,7 +17,7 @@ TechniqueArgument = namedtuple(
     )
 
 
-class Technique(object):
+class Technique:
     """Base class for techniques
     All specific technique classes inherits from this class.
     Properties available on the object:
@@ -59,7 +65,7 @@ class Technique(object):
         self.args = args
         # The arguments must be converted to an array of TECCParam
         self._c_args = None
-        self.technique_filename = technique_filename
+        self.technique_filename = driverpath + technique_filename
 
     def c_args(self, instrument):
         """Return the arguments struct
@@ -104,14 +110,13 @@ class Technique(object):
         for arg in self.args:
             # Bounds check the argument
             self._check_arg(arg)
-
             # When type is dict, it means that type is a int_code -> value_str
             # dict, that should be used to translate the str to an int by
             # reversing it be able to look up codes from strs and replace
             # value
             if isinstance(arg.type, dict):
-                value = ctypes.reverse_dict(arg.type)[arg.value]
-                param = structures.TECCParam()
+                value = reverse_dict(arg.type)[arg.value]
+                param = structures.TEccParam()
                 instrument.define_integer_parameter(
                     arg.label, value, 0, param
                     )
@@ -142,7 +147,7 @@ class Technique(object):
             # Iterate over all the steps for the parameter (for most will just
             # be 1)
             for index in range(min(step_number, len(values))):
-                param = structures.TECCParam()
+                param = structures.TEccParam()
                 try:
                     conversion_function(
                         arg.label, values[index], index, param
@@ -156,10 +161,73 @@ class Technique(object):
                         )
                 constructed_args.append(param)
 
-        self._c_args = (structures.TECCParam *
+        self._c_args = (structures.TEccParam *
                         len(constructed_args))()
         for index, param in enumerate(constructed_args):
             self._c_args[index] = param
+
+    # def _init_c_args(self, instrument):
+    #     """Initialize the arguments struct
+    #     Args:
+    #         instrument (:class:`GeneralPotentiostat`): Instrument instance,
+    #             should be an instance of a subclass of
+    #             :class:`GeneralPotentiostat`
+    #     """
+
+    #     # If it is a technique that has multistep arguments, get the number of
+    #     # steps
+    #     step_number = 1
+    #     for arg in self.args:
+    #         if arg.label == 'Step_number':
+    #             step_number = arg.value
+
+    #     constructed_args = []
+    #     for arg in self.args:
+    #         # Bounds check the argument
+    #         self._check_arg(arg)
+
+    #         # When type is dict, it means that type is a int_code -> value_str
+    #         # dict, that should be used to translate the str to an int by
+    #         # reversing it be able to look up codes from strs and replace
+    #         # value
+    #         if isinstance(arg.type, dict):
+    #             value = reverse_dict(arg.type)[arg.value]
+    #             param = structures.TECCParam()
+    #             instrument.define_integer_parameter(
+    #                 arg.label, value, 0, param
+    #                 )
+    #             constructed_args.append(param)
+    #             continue
+    #         # Get the appropriate conversion function, to populate the EccParam
+    #         stripped_type = arg.type.strip('[]')
+
+    #         # Get the conversion method from the instrument instance, this
+    #         # is named something like defined_bool_parameter
+    #         conversion_function = getattr(
+    #             instrument,
+    #             'define_{}_parameter'.format(stripped_type)
+    #             )
+
+    #         # Iterate over all the steps for the parameter (for most will just
+    #         # be 1)
+    #         values = list(arg.value)
+    #         print(values)
+    #     #     for index in range(min(step_number, len(values))):
+    #     #         param = structures.TECCParam()
+    #     #         conversion_function(
+    #     #             label=arg.label,
+    #     #             value=values[index],
+    #     #             index=index,
+    #     #             tecc_param=param
+    #     #         )
+
+    #     #         constructed_args.append(param)
+
+    #     # self._c_args = (structures.TECCParam *
+    #     #                 len(constructed_args))()
+
+    #     # for index, param in enumerate(constructed_args):
+    #     #     self._c_args[index] = param
 
     @staticmethod
     def _check_arg(arg):
@@ -253,6 +321,7 @@ class OCV(Technique):
             E_range (str): A string describing the E range to use, see the
                 :data:`E_RANGES` module variable for possible values
         """
+
         args = (
             TechniqueArgument(
                 'Rest_time_T', 'single', rest_time_T, '>=', 0
@@ -264,11 +333,21 @@ class OCV(Technique):
                 'Record_every_dT', 'single', record_every_dT, '>=', 0
                 ),
             TechniqueArgument(
-                'E_Range', constants.VoltageRange, E_range, 'in',
-                constants.Erange.values()
+                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
                 ),
             )
-        super(OCV, self).__init__(args, 'ocv.ecc')
+        super(OCV, self).__init__(
+            args=args, technique_filename='ocv.ecc'
+            )
+
+
+#:E range number to E range name translation dict
+E_RANGES = {
+    0: 'KBIO_ERANGE_2_5',
+    1: 'KBIO_ERANGE_5',
+    2: 'KBIO_ERANGE_10',
+    3: 'KBIO_ERANGE_AUTO'
+    }
 
 
 # Section 7.3 in the specification
@@ -348,11 +427,6 @@ class CV(Technique):
                     input_name, len(locals()[input_name])
                     )
                 raise ValueError(message)
-
-    # TechniqueArgument = namedtuple(
-    # 'TechniqueArgument',
-    # ['label', 'type', 'value', 'check', 'check_argument'])
-
         args = (
             TechniqueArgument(
                 'vs_initial', '[bool]', vs_initial, 'in',
@@ -387,21 +461,47 @@ class CV(Technique):
                 'in_float_range', (0.0, 1.0)
                 ),
             TechniqueArgument(
-                'I_Range', constants.CurrentRange, I_range, 'in',
-                constants.CurrentRange
+                'I_Range', I_RANGES, I_range, 'in', I_RANGES.values()
                 ),
             TechniqueArgument(
-                'E_Range', constants.VoltageRange, E_range, 'in',
-                constants.VoltageRange
+                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
                 ),
             TechniqueArgument(
-                'Bandwidth', constants.Bandwidth, bandwidth, 'in',
-                constants.Bandwidth
+                'Bandwidth', BANDWIDTHS, bandwidth, 'in',
+                BANDWIDTHS.values()
                 ),
             )
         super(CV, self).__init__(args, 'cv.ecc')
 
-
+#:I range number to I range name translation dict
+I_RANGES = {
+    0: 'KBIO_IRANGE_100pA',
+    1: 'KBIO_IRANGE_1nA',
+    2: 'KBIO_IRANGE_10nA',
+    3: 'KBIO_IRANGE_100nA',
+    4: 'KBIO_IRANGE_1uA',
+    5: 'KBIO_IRANGE_10uA',
+    6: 'KBIO_IRANGE_100uA',
+    7: 'KBIO_IRANGE_1mA',
+    8: 'KBIO_IRANGE_10mA',
+    9: 'KBIO_IRANGE_100mA',
+    10: 'KBIO_IRANGE_1A',
+    11: 'KBIO_IRANGE_BOOSTER',
+    12: 'KBIO_IRANGE_AUTO',
+    13: 'KBIO_IRANGE_10pA',  # IRANGE_100pA + Igain x10
+    14: 'KBIO_IRANGE_1pA',  # IRANGE_100pA + Igain x100
+}
+BANDWIDTHS = {
+    1: 'KBIO_BW_1',
+    2: 'KBIO_BW_2',
+    3: 'KBIO_BW_3',
+    4: 'KBIO_BW_4',
+    5: 'KBIO_BW_5',
+    6: 'KBIO_BW_6',
+    7: 'KBIO_BW_7',
+    8: 'KBIO_BW_8',
+    9: 'KBIO_BW_9'
+    }
 # Section 7.5 in the specification
 class CP(Technique):
     """Chrono-Potentiometry (CP) technique class.
@@ -490,10 +590,13 @@ class CP(Technique):
                 'N_Cycles', 'integer', N_cycles, '>=', 0
                 ),
             TechniqueArgument(
-                'I_Range', constants.CurrentRange('add'), I_range, 'in', constants.CurrentRange(...).value
+                'I_Range', constants.CurrentRange('add'), I_range,
+                'in',
+                constants.CurrentRange(...).value
                 ),
             TechniqueArgument(
-                'E_Range', constants.VoltageRange, E_range, 'in', constants.VoltageRange.values()
+                'E_Range', constants.VoltageRange, E_range, 'in',
+                constants.VoltageRange.values()
                 ),
             TechniqueArgument(
                 'Bandwidth', constants.Bandwidth, bandwidth, 'in',
@@ -559,51 +662,33 @@ class CA(Technique):
         Raises:
             ValueError: On bad lengths for the list arguments
         """
-        if not len(voltage_step) == len(vs_initial
-                                       ) == len(duration_step):
+        if not len(voltage_step) == len(vs_initial) == len(duration_step):
             message = 'The length of voltage_step, vs_initial and '\
                       'duration_step must be the same'
             raise ValueError(message)
 
         args = (
-            TechniqueArgument(
-                'Voltage_step', '[single]', voltage_step, None, None
-                ),
-            TechniqueArgument(
-                'vs_initial', '[bool]', vs_initial, 'in',
-                [True, False]
-                ),
-            TechniqueArgument(
-                'Duration_step', '[single]', duration_step, '>=', 0.0
-                ),
-            TechniqueArgument(
-                'Step_number', 'integer', len(voltage_step), 'in',
-                range(99)
-                ),
-            TechniqueArgument(
-                'Record_every_dT', 'single', record_every_dT, '>=',
-                0.0
-                ),
-            TechniqueArgument(
-                'Record_every_dI', 'single', record_every_dI, '>=',
-                0.0
-                ),
-            TechniqueArgument(
-                'N_Cycles', 'integer', N_cycles, '>=', 0
-                ),
-            TechniqueArgument(
-                'I_Range', I_RANGES, I_range, 'in', I_RANGES.values()
-                ),
-            TechniqueArgument(
-                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
-                ),
-            TechniqueArgument(
-                'Bandwidth', BANDWIDTHS, bandwidth, 'in',
-                BANDWIDTHS.values()
-                ),
-            )
+            TechniqueArgument('Voltage_step', '[single]', voltage_step,
+                              None, None),
+            TechniqueArgument('vs_initial', '[bool]', vs_initial,
+                              'in', [True, False]),
+            TechniqueArgument('Duration_step', '[single]', duration_step,
+                              '>=', 0.0),
+            TechniqueArgument('Step_number', 'integer', len(voltage_step),
+                              'in', range(99)),
+            TechniqueArgument('Record_every_dT', 'single', record_every_dT,
+                              '>=', 0.0),
+            TechniqueArgument('Record_every_dI', 'single', record_every_dI,
+                              '>=', 0.0),
+            TechniqueArgument('N_Cycles', 'integer', N_cycles, '>=', 0),
+            TechniqueArgument('I_Range', I_RANGES, I_range,
+                              'in', I_RANGES.values()),
+            TechniqueArgument('E_Range', E_RANGES, E_range,
+                              'in', E_RANGES.values()),
+            TechniqueArgument('Bandwidth', BANDWIDTHS, bandwidth, 'in',
+                              BANDWIDTHS.values()),
+        )
         super(CA, self).__init__(args, 'ca.ecc')
-
 
 #:Technique name to technique class translation dict. IMPORTANT. Add newly
 #:implemented techniques to this dictionary
@@ -613,3 +698,8 @@ TechniqueIdentifiers = {
     'KBIO_TECHID_CA': CA,
     'KBIO_TECHID_CV': CV
     }
+
+
+def reverse_dict(dict_):
+    """Reverse the key/value status of a dict"""
+    return dict([[v, k] for k, v in dict_.items()])

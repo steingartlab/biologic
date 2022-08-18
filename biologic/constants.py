@@ -40,13 +40,13 @@ class Device(AutoEnum):
     KBIO_DEV_UNKNOW = auto()
 
 
-class Firmware(AutoEnum):
-    KBIO_FIRM_NONE = auto()
-    KBIO_FIRM_INTERPR = auto()
-    KBIO_FIRM_UNKNOWN = auto()
-    KBIO_FIRM_KERNEL = auto()
-    KBIO_FIRM_INVALID = auto()
-    KBIO_FIRM_ECAL = auto()
+class Firmware(Enum):
+    KBIO_FIRM_NONE = 0
+    KBIO_FIRM_INTERPR = 1
+    KBIO_FIRM_UNKNOWN = 4
+    KBIO_FIRM_KERNEL = 5
+    KBIO_FIRM_INVALID = 8
+    KBIO_FIRM_ECAL = 10
 
 
 class Amplifier(AutoEnum):

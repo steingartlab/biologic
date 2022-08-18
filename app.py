@@ -18,7 +18,7 @@ app = flask.Flask(__name__)
 
 
 def configure_routes(app):
-    from biologic import wrapper
+    import wrapper
 
     @app.route('/')
     def hello_world():
