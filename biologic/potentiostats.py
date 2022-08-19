@@ -1,19 +1,26 @@
+"""Classes containing methods for using EC-Lab drivers to communicate with BioLogic potentiostat."""
+
 import ctypes
 import json
+import typing
 
-from biologic import constants, exceptions, handler, structures, techniques
+from biologic import constants, handler, structures, utils
 
 with open('biologic/config.json') as f:
     settings = json.load(f)
 
 driverpath = settings['driver']['driverpath']
 
+driver = ctypes.WinDLL(driverpath + 'EClib64.dll')
+
 
 class InstrumentFinder:
     """Finds BioLogic instruments connected via ethernet.
     
     Attributes:
-        self.driver (ctypes.WinDLL): Driver for calling EC-Lab functions.
+        driver (ctypes.WinDLL): Driver for calling EC-Lab functions.
+        self.ip_address (str): Instrument IP-address, e.g. '192.168.0.1'.
+        self.instrument_type (str): Instrument type, e.g. 'SP-150'.
     """
 
     def __init__(self, driver: str = 'blfind64.dll'):
@@ -23,17 +30,33 @@ class InstrumentFinder:
                 between 32 and 64-bit systems. Defaults to 'blfind64.dll'.
         """
         self.driver = ctypes.WinDLL(driverpath + driver)
+        self._ip_address: str = None
+        self._instrument_type: str = None
 
-    def find(self, bytes_: int = 255) -> str:
-        """Returns IP-addresses of connected BioLogic potentiostats.
+    @property
+    def ip_address(self) -> str:
+        """Returns parsed IP-address of connected instrument.
+
+        Returns:
+            str: Instrument IP-address, e.g. '192.168.0.1'.
+        """
+        return self._ip_address
+
+    @property
+    def instrument_type(self) -> str:
+        """Returns parsed type of connected instrument.
+
+        Returns:
+            str: Instrument type, e.g. 'SP-150'.
+        """
+        return self._instrument_type
+
+    def find(self, bytes_: int = 255) -> None:
+        """Searches for ethernet-connected BioLogic potentiostats.
 
         Args:
             bytes_ (int, optional): Number of bytes to allocate to buffer.
                 Defaults to 255.
-
-        Returns:
-            str or None: IP-address of connected potentiostats.
-                If none are found it returns None.
         """
 
         lst_dev = ctypes.create_string_buffer(bytes_)
@@ -45,11 +68,11 @@ class InstrumentFinder:
             ctypes.byref(nbr_dev)
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
-        ip_address = parse_potentiostat_search(bytes_string=lst_dev)
-
-        return ip_address
+        self._ip_address, self._instrument_type = utils.parse_potentiostat_search(
+            bytes_string=lst_dev
+            )
 
 
 class GeneralPotentiostat:
@@ -64,28 +87,17 @@ class GeneralPotentiostat:
             be explicitly mentioned in every single method.
     """
 
-    def __init__(
-        self,
-        type_: str,
-        driver: str = 'EClib64.dll',
-        series: str = 'vmp3'
-        ):
+    def __init__(self, type_: str):
         """Initialize the potentiostat driver.
 
         Args:
             type_ (str): Device type, e.g. 'KBIO_DEV_HCP1005'.
-            EClib_dll_path (str): Driver filename. For distinguishing
-                between 32 and 64-bit systems. Defaults to 'EClib64.dll'.
-            series (str, optional): One of two series of instruments, either
-                'sp300' or 'vmp3'. Defaults to 'vmp3'.
         
         Raises:
             WindowsError: If driver isn't found.
         """
 
         self._type = type_
-        self.driver = ctypes.WinDLL(driverpath + driver)
-        self.series = series
 
         self._id = None
         self._device_info = None
@@ -111,7 +123,7 @@ class GeneralPotentiostat:
         if self._device_info is None:
             return None
 
-        out = structure_to_dict(self._device_info)
+        out = utils.structure_to_dict(self._device_info)
         out['DeviceCode(translated)'] = constants.Device(
             out['DeviceCode']
             ).value
@@ -135,43 +147,81 @@ class GeneralPotentiostat:
         self._id = ctypes.c_int32()
         self._device_info = structures.DeviceInfos()
 
-        status = self.driver.BL_Connect(
+        status = driver.BL_Connect(
             ctypes.byref(address), ctypes.c_uint8(timeout),
             ctypes.byref(self._id), ctypes.byref(self._device_info)
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
-        assert_device_type_ok(
+        utils.assert_device_type_ok(
             device_code=self._device_info.DeviceCode,
             reference_device=self._type
             )
 
-    def get_error_status(self, channel: int = 0, bytes_: int = 255):
+    def get_error_status(self, channel: int = 0):
 
-        c_error_status = ctypes.create_string_buffer(bytes_)
-        c_opt_pos = ctypes.create_string_buffer(bytes_)
+        c_opt_error = ctypes.c_int32()
+        c_opt_pos = ctypes.c_int32()
 
-        status = self.driver.BL_GetOptErr(
-            self._id, channel, ctypes.byref(c_error_status),
+        status = driver.BL_GetOptErr(
+            self._id, channel, ctypes.byref(c_opt_error),
             ctypes.byref(c_opt_pos)
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
+
+        print(
+            'opterror:', c_opt_error.value, 'optpos:', c_opt_pos.value
+            )
 
     def test_connection(self) -> None:
         """Tests device connection."""
 
-        status = self.driver.BL_TestConnection(self._id)
+        status = driver.BL_TestConnection(self._id)
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
+
+    def test_communication_speed(
+        self, channel: int = 0
+        ) -> typing.List[str]:
+        """Tests communication speed between computer and instrument.
+
+        Args:
+            channel (int, optional): Selected channel.
+                Defaults to 0.   
+
+        Returns:
+            typing.List[str]: Communication speed between library/device and library/kernel
+        """
+
+        c_spd_rcvt = ctypes.c_int32()
+        c_spd_kernel = ctypes.c_int32()
+
+        status = driver.BL_TestCommSpeed(
+            self._id, channel, ctypes.byref(c_spd_rcvt),
+            ctypes.byref(c_spd_kernel)
+            )
+
+        utils.assert_status_ok(driver=driver, return_code=status)
+
+        print(
+            'communication speed between library and device:',
+            c_spd_rcvt.value
+            )
+        print(
+            'communication speed between library and channel:',
+            c_spd_kernel.value
+            )
+
+        return c_spd_rcvt.value, c_spd_kernel.value
 
     def disconnect(self) -> None:
         """Disconnects from device."""
 
-        status = self.driver.BL_Disconnect(self._id)
+        status = driver.BL_Disconnect(self._id)
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
         self._id = None
         self._device_info = None
@@ -180,7 +230,7 @@ class GeneralPotentiostat:
         self,
         channels: list,
         force_reload: bool = False,
-        show_gauge: bool = True,
+        show_gauge: bool = False,
         kernel: str = 'kernel.bin',
         xlx: str = 'Vmp_ii_0437_a6.xlx'
         ) -> list:
@@ -205,10 +255,6 @@ class GeneralPotentiostat:
         """
 
         c_results = (ctypes.c_int32 * len(channels))()
-        p_results = ctypes.cast(
-            c_results, ctypes.POINTER(ctypes.c_int32)
-            )
-
         c_channels = (ctypes.c_uint8 * len(channels))()
 
         for index in range(len(channels)):
@@ -224,13 +270,13 @@ class GeneralPotentiostat:
         xlx_file: str = driverpath + xlx
         c_xlx_file = ctypes.create_string_buffer(xlx_file.encode())
 
-        status = self.driver.BL_LoadFirmware(
-            self._id, p_channels, p_results, len(channels),
-            show_gauge, force_reload, ctypes.byref(c_bin_file),
-            ctypes.byref(c_xlx_file)
+        status = driver.BL_LoadFirmware(
+            self._id, p_channels, ctypes.byref(c_results),
+            len(channels), show_gauge, force_reload,
+            ctypes.byref(c_bin_file), ctypes.byref(c_xlx_file)
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
         return list(c_results)
 
@@ -244,12 +290,12 @@ class GeneralPotentiostat:
         status_ = (ctypes.c_uint8 * no_channels)()
         pstatus = ctypes.cast(status_, ctypes.POINTER(ctypes.c_uint8))
 
-        status = self.driver.BL_GetChannelsPlugged(
+        status = driver.BL_GetChannelsPlugged(
             self._id, pstatus, no_channels
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
-        print([result == 1 for result in status_])
+        utils.assert_status_ok(driver=driver, return_code=status)
+
         return [result == 1 for result in status_]
 
     def is_channel_plugged(self, channel: int = 0) -> bool:
@@ -263,7 +309,7 @@ class GeneralPotentiostat:
             bool: Whether the channel is plugged or not.
         """
 
-        result = self.driver.BL_IsChannelPlugged(self._id, channel)
+        result = driver.BL_IsChannelPlugged(self._id, channel)
 
         return bool(result)
 
@@ -285,37 +331,19 @@ class GeneralPotentiostat:
         """
 
         c_channel_info = structures.ChannelInfos()
-        self.driver.BL_GetChannelInfos(
+
+        driver.BL_GetChannelInfos(
             self._id, channel, ctypes.byref(c_channel_info)
             )
-        channel_info = structure_to_dict(structure=c_channel_info)
 
-        # Translate code to strings
-        channel_info['FirmwareCode(translated)'] = constants.Firmware(
-            channel_info['FirmwareCode']
-            ).name
-        channel_info['AmpCode(translated)'] = constants.Amplifier(
-            channel_info['AmpCode']
-            ).name
-        channel_info['State(translated)'] = constants.State(
-            channel_info['State']
-            ).name
-        channel_info['MaxIRange(translated)'
-                    ] = constants.CurrentRange(
-                        channel_info['MaxIRange']
-                        ).name
-        channel_info['MinIRange(translated)'
-                    ] = constants.CurrentRange(
-                        channel_info['MinIRange']
-                        ).name
-        channel_info['MaxBandwidth'] = constants.Bandwidth(
-            channel_info['MaxBandwidth']
-            ).name
+        channel_info = utils.structure_to_dict(
+            structure=c_channel_info
+            )
+        channel_info_parsed = utils.parse_channel_info(
+            channel_info=channel_info
+            )
 
-        for key, val in channel_info.items():
-            print(f'{key}: {val}')
-
-        return channel_info
+        return channel_info_parsed
 
     def get_message(self, channel: int = 0) -> str:
         """Return a message from the firmware of a channel.
@@ -331,163 +359,73 @@ class GeneralPotentiostat:
         size = ctypes.c_uint32(255)
         message = ctypes.create_string_buffer(255)
 
-        status = self.driver.BL_GetMessage(
+        status = driver.BL_GetMessage(
             self._id, channel, ctypes.byref(message),
             ctypes.byref(size)
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
         return message.value.decode()
 
-    # Technique functions:
     def load_technique(
         self,
-        technique: techniques.Technique,
+        technique_path: str,
+        c_tecc_params: structures.EccParams,
         first: bool = True,
         last: bool = True,
         channel: int = 0
         ) -> None:
         """Load a technique onto the specified channel.
-        
-        Args:
-            technique (techniques.Technique): The technique to load.
-            first (bool, optional): Whether this technique is the first technique.
-                Defaults to True.
-            last (bool, optional): Thether this technique is the last technique.
-                Defaults to True.
-            channel (int, optional): Selected channel.
-                Defaults to 0.
 
-        Raises:
-            ECLibError: On errors from the EClib communications library.
+        Args:
+            c_technique_params (structures.TEccParams): Structure of
+                parameters of selected technique. Refer to documentation
+                and module techniques.py for details.
+            technique_filename (str): Technique filename w path,
+                e.g. 'C:\\Users\\ocv.ecc'.
+            first (bool, optional): Whether this technique is the first
+                technique. Defaults to True.
+            last (bool, optional): Thether this technique is the last
+                technique. Defaults to True.
+            channel (int, optional): Selected channel. Defaults to 0.
         """
 
-        c_technique_file = ctypes.create_string_buffer(
-            'C:\\Users\\stein\\github\\biologic\\EC-Lab Development Package\\EC-Lab Development Package\\ocv.ecc'
-            .encode()
-            )
-        c_params = technique.c_args(self)
-        c_tecc_params = structures.TEccParams()
-        c_tecc_params.len = len(c_params)
-        c_tecc_params.pParams = ctypes.cast(
-            c_params, ctypes.POINTER(structures.TEccParam)
-            )
-
-        status = self.driver.BL_LoadTechnique(
+        status = driver.BL_LoadTechnique(
             self._id,
-            ctypes.c_uint8(channel),
-            ctypes.byref(c_technique_file),
+            channel,
+            technique_path.encode(),
             c_tecc_params,
-            ctypes.c_bool(first),
-            ctypes.c_bool(last),
-            ctypes.c_bool(False),
-            )
-        print(c_technique_file.raw.decode())
-
-        assert_status_ok(driver=self.driver, return_code=status)
-
-    def define_bool_parameter(
-        self, label: str, value: bool, index: int,
-        tecc_param: structures.TEccParam
-        ) -> None:
-        """Defines a boolean TECCParam for a technique.
-
-        This is a library convenience function to fill
-        out the TECCParam struct for a _boolean_ value.
-        
-        Args:
-            label (str): Parameter label.
-            value (bool): Parameter boolean value.
-            index (int): Parameter index.
-            tecc_param (TECCParam): A TECCParam struct.
-        """
-
-        c_label = ctypes.create_string_buffer(label.encode())
-
-        status = self.driver.BL_DefineBoolParameter(
-            ctypes.byref(c_label), value, index,
-            ctypes.byref(tecc_param)
+            first,
+            last,
+            False,
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
-    def define_single_parameter(
-        self, label: str, value: bool, index: int,
-        tecc_param: structures.TEccParam
-        ) -> None:
-        """Defines a single (float) TECCParam for a technique.
-
-        This is a library convenience function to corectly fill
-        out the TECCParam struct for a _single_ (float) value.
-
-        Args:
-            label (str): Parameter label.
-            value (bool): Parameter boolean value.
-            index (int): Parameter index.
-            tecc_param (TECCParam): A TECCParam struct.
-        """
-
-        c_label = ctypes.create_string_buffer(label.encode())
-
-        status = self.driver.BL_DefineSglParameter(
-            ctypes.byref(c_label),
-            ctypes.c_float(value),
-            index,
-            ctypes.byref(tecc_param),
-            )
-
-        assert_status_ok(driver=self.driver, return_code=status)
-
-    def define_integer_parameter(
-        self, label: str, value: int, index: int,
-        tecc_param: structures.TEccParam
-        ) -> None:
-        """Defines an integer TECCParam for a technique.
-        
-        This is a library convinience function to fill
-        out the TECCParam struct for an _integer_ value.
-
-        Args:
-            label (str): Parameter label.
-            value (bool): Parameter boolean value.
-            index (int): Parameter index.
-            tecc_param (TECCParam): A TECCParam struct.
-        """
-
-        c_label = ctypes.create_string_buffer(label.encode())
-
-        status = self.driver.BL_DefineIntParameter(
-            ctypes.byref(c_label), value, index,
-            ctypes.byref(tecc_param)
-            )
-
-        assert_status_ok(driver=self.driver, return_code=status)
-
-    # Start/stop functions:
     def start_channel(self, channel: int = 0) -> None:
-        """Start technique loaded on channel.
+        """Starts technique loaded on channel.
         
         Args:
             channel (int, optional): Selected channel.
                     Defaults to 0.
         """
 
-        status = self.driver.BL_StartChannel(self._id, channel)
+        status = driver.BL_StartChannel(self._id, channel)
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
     def stop_channel(self, channel: int = 0) -> None:
-        """Stop technique loaded on channel.
+        """Stops technique loaded on channel.
 
         Args:
             channel (int, optional): Selected channel.
                     Defaults to 0.
         """
 
-        status = self.driver.BL_StopChannel(self._id, channel)
+        status = driver.BL_StopChannel(self._id, channel)
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
     def get_current_values(self, channel: int = 0) -> dict:
         """Get the current values for the spcified channel.
@@ -502,18 +440,23 @@ class GeneralPotentiostat:
 
         c_current_values = structures.CurrentValues()
 
-        status = self.driver.BL_GetCurrentValues(
+        status = driver.BL_GetCurrentValues(
             self._id, channel, ctypes.byref(c_current_values)
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
         # Convert the struct to a dict and translate a few values
-        current_values = ctypes.structure_to_dict(c_current_values)
-        current_values['State(translated)'] = constants.State(current_values['State']).name
+        current_values = utils.structure_to_dict(c_current_values)
+        current_values['State(translated)'] = constants.State(
+            current_values['State']
+            ).name
         current_values['IRange(translated)'] = constants.CurrentRange(
             current_values['IRange']
             ).name
+
+        print('\n\n\n')
+        print(current_values)
 
         return current_values
 
@@ -536,7 +479,7 @@ class GeneralPotentiostat:
         c_data_infos = structures.DataInfos()
         c_current_values = structures.CurrentValues()
 
-        status = self.driver.BL_GetData(
+        status = driver.BL_GetData(
             self._id,
             channel,
             p_data_buffer,
@@ -544,7 +487,7 @@ class GeneralPotentiostat:
             ctypes.byref(c_current_values),
             )
 
-        assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_status_ok(driver=driver, return_code=status)
 
         # The KBIOData will ask the appropriate techniques for which data
         # fields they return data in
@@ -556,34 +499,6 @@ class GeneralPotentiostat:
             data = None
 
         return data
-
-    def convert_numeric_to_single(self, numeric: int) -> float:
-        """Convert a numeric (integer) into a float
-        The buffer used to get data out of the device consist only of uint32s
-        (most likely to keep its layout simple). To transfer a float, the
-        EClib library uses a trick, wherein the value of the float is saved as
-        a uint32, by giving the uint32 the integer values, whose
-        bit-representation corresponds to the float that it should
-        describe. This function is used to convert the integer back to the
-        corresponding float.
-        NOTE: This trick can also be performed with ctypes along the lines of:
-        ``c_float.from_buffer(c_uint32(numeric))``, but in this driver the
-        library version is used.
-        Args:
-            numeric (int): The integer that represents a float
-        Returns:
-            float: The float value
-        """
-
-        c_out_float = ctypes.c_float()
-
-        status = self.driver.BL_ConvertNumericIntoSingle(
-            numeric, ctypes.byref(c_out_float)
-            )
-
-        assert_status_ok(driver=self.driver, return_code=status)
-
-        return c_out_float.value
 
 
 class HCP1005(GeneralPotentiostat):
@@ -597,115 +512,49 @@ class HCP1005(GeneralPotentiostat):
         super(HCP1005, self).__init__(type_='KBIO_DEV_HCP1005')
 
 
-def structure_to_dict(structure: ctypes.Structure) -> dict:
-    """Convert a ctypes.Structure to a python dict."""
+class SP150(GeneralPotentiostat):
+    """Specific driver for the SP-150 potentiostat"""
 
-    out = {}
+    def __init__(self):
+        """Initialize the HCP-1005 potentiostat driver.
+        Refer to superclass initializer for arguments.
+        """
 
-    for key, _ in structure._fields_:
-        out[key] = getattr(structure, key)
-
-    return out
-
-
-def assert_device_type_ok(
-    device_code: int, reference_device: str
-    ) -> None:
-    """Checks whether returned device code is the expected device.
-
-    Args:
-        device_code (int): _description_
-        reference_device (st): _description_
-
-    Raises:
-        exceptions.ECLibCustomException: If expected and actual
-            don't match.
-    """
-
-    if constants.Device(device_code).name == reference_device:
-        return
-
-    message = f'Device code ({constants.Device(device_code)})'\
-              f'returned from the device on connect does not match the'\
-              f'device type of class ({reference_device}).'
-
-    raise exceptions.ECLibCustomException(-9000, message)
+        super(SP150, self).__init__(type_='KBIO_DEV_SP150')
 
 
-def assert_status_ok(driver: ctypes.WinDLL, return_code: int) -> None:
-    """Checks return code and raises exception if necessary.
+#--------------------------------------------------------------------------------#
+# Driver functions independent of self._id -> keeping detached from main class to reduce coupling.
+
+
+def convert_numeric_to_single(numeric: int) -> float:
+    """Converts a numeric (integer) into a float.
+
+    The buffer used to get data out of the device consist only of uint32s
+    (most likely to keep its layout simple). To transfer a float, the
+    EClib library uses a trick, wherein the value of the float is saved as
+    a uint32, by giving the uint32 the integer values, whose
+    bit-representation corresponds to the float that it should
+    describe. This function is used to convert the integer back to the
+    corresponding float.
+
+    NOTE: This trick can also be performed with ctypes along the lines of:
+    ``c_float.from_buffer(c_uint32(numeric))``, but in this driver the
+    library version is used.
 
     Args:
-        driver (ctypes.WinDLL): Driver from ECLib function call.
-        return_code (int): Return code from 
-
-    Raises:
-        exceptions.ECLibError: If status is not OK.
-    """
-
-    if return_code == 0:
-        return
-
-    message = _get_error_message(
-        driver=driver, error_code=return_code
-        )
-
-    raise exceptions.ECLibError(return_code, message)
-
-
-def _get_error_message(
-    driver: ctypes.WinDLL, error_code: int, bytes_: int = 255
-    ) -> str:
-    """Returns error message's corresponding error_code.
-
-    Helper function for assert_status_ok().
-    
-    Args:
-        driver (ctypes.WinDLL): Driver for calling ECLib function.
-        error_code (int): The error number to translate.
-        bytes_ (int): Number of bytes to allocate to message.
+        numeric (int): Integer representing a float
     
     Returns:
-        str: Error message's corresponding error_code.
+        float: The float value.
     """
 
-    message = ctypes.create_string_buffer(bytes_)
-    number_of_chars = ctypes.c_uint32(bytes_)
+    c_out_float = ctypes.c_float()
 
-    status = driver.BL_GetErrorMsg(
-        ctypes.c_int32(error_code), ctypes.byref(message),
-        ctypes.byref(number_of_chars)
+    status = driver.BL_ConvertNumericIntoSingle(
+        numeric, ctypes.byref(c_out_float)
         )
 
-    # Can't use assert__status_ok() here since it implicitly runs this method.
-    if status != 0:
-        raise exceptions.BLFindError(error_code=status, message=None)
+    utils.assert_status_ok(driver=driver, return_code=status)
 
-    return message.value
-
-
-def parse_potentiostat_search(bytes_string: bytes) -> str:
-    """Extracts IP-address from potentiostat search.
-
-    Hacky. Might fix later. Can only handle one device.
-
-    Args:
-        bytes_string (bytes): Result of BL_FindEChemEthDev()
-
-    Returns:
-        str: IP-address of connected potentiostat.
-    """
-
-    parsed = bytes_string.raw.decode()
-
-    ip_w_unicode = parsed.split('$')[1]
-
-    # Still contains unicode stuff. Got to remove
-    ip = ''
-    for character in ip_w_unicode:
-        if character.encode('utf-8') == b'\x00':
-            continue
-
-        ip += character
-
-    return ip
+    return c_out_float.value
