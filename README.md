@@ -1,6 +1,3 @@
-# biologic
-For controlling BioLogic potentiostats
-
 # BioLogic
 
 ## Overture 🔋 
