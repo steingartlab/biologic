@@ -1,10 +1,20 @@
 """Low-level helper functions for potentiostat classes and associated techniques."""
 
 import ctypes
-from enum import Enum
-import ipaddress
+import json
+from typing import List, TypedDict
 
-from biologic import constants, exceptions
+from biologic import constants, exceptions, structures
+
+with open('biologic\\config.json', 'r') as f:
+    settings = json.load(f)
+
+DRIVERPATH = settings['driverpath']
+
+
+class ParsedParams(TypedDict):
+    key: str
+    params: structures.ECC_param
 
 
 def _get_error_message(
@@ -27,11 +37,12 @@ def _get_error_message(
     number_of_chars = ctypes.c_uint32(bytes_)
 
     status = driver.BL_GetErrorMsg(
-        ctypes.c_int32(error_code), ctypes.byref(message),
+        error_code,
+        ctypes.byref(message),
         ctypes.byref(number_of_chars)
         )
 
-    # Can't use assert__status_ok() here since it implicitly runs this method.
+    # # Can't use assert__status_ok() here since it implicitly runs this method.
     if status != 0:
         raise exceptions.BLFindError(error_code=status, message=None)
 
@@ -83,85 +94,68 @@ def assert_status_ok(driver: ctypes.WinDLL, return_code: int) -> None:
     raise exceptions.ECLibError(return_code, message)
 
 
-def assert_technique_argument_ok(param):
-    """Perform bounds check on a single argument"""
+# def change_ip_address(instrument_ip: str):
+#     """Modifies PC's IP-address.
 
-    if param.check is None:
-        return
+#     NOTE: Not implemented.
 
-    # If the type is not a dict (used for constants) and indicates an array
-    if isinstance(param.type, Enum):
-        values = param.value
-    elif param.type.startswith('['):
-        values = param.value
-    else:
-        values = [param.value]
+#     The PC must be on the same network as the instrument. The
+#     instrument's network address varies and the PC's automatically
+#     assigned IP-address can clash with the instrument's.
 
-    # Check arguments with a list of accepted values
-    if param.check == 'in':
-        for value in values:
-            if value not in param.check_argument:
-                message = f'{value} is not among the valid values for' \
-                          f'{param.label}. Valid values are: {param.check_argument}'
-                raise exceptions.ECLibCustomException(message, -10000)
-        return
+#     This circumvents having to manually change the PC's IP-address
+#     in Control Panel and restarting the machine everytime it's
+#     connected to a new instrument.
 
-    # Perform bounds check, if any
-    if param.check == '>=':
-        print('\n', values)
-        for value in values:
-            if not value >= param.check_argument:
-                message = 'Value {} for parameter \'{}\' failed '\
-                            'check >={}'.format(
-                                value, param.label, param.check_argument)
-                raise exceptions.ECLibCustomException(message, -10001)
-        return
+#     Args:
+#         instrument_ip (str): Instrument's IP-address,
+#             e.g. '192.168.0.1'
+#     """
 
-    # Perform in two parameter range check: A < value < B
-    if param.check == 'in_float_range':
-        for value in values:
-            if not param.check_argument[
-                0] <= value <= param.check_argument[1]:
-                message = 'Value {} for parameter \'{}\' failed '\
-                            'check between {} and {}'.format(
-                                value, param.label,
-                                *param.check_argument
-                            )
-                raise exceptions.ECLibCustomException(message, -10002)
-        return
+#     ip = ipaddress.IPv4Address(instrument_ip)
 
-    message = 'Unknown technique parameter check: {}'.format(
-        param.check
-        )
-    raise exceptions.ECLibCustomException(message, -10002)
+#     network = ipaddress.IPv4Network()
+
+#     print(ip._ALL_ONES)
 
 
-def change_ip_address(instrument_ip: str):
-    """Modifies PC's IP-address.
+def convert_numeric_to_single(driver, numeric: int) -> float:
+    """Converts a numeric (integer) into a float.
 
-    The PC must be on the same network as the instrument. The
-    instrument's network address varies and the PC's automatically
-    assigned IP-address can clash with the instrument's.
-    
-    This circumvents having to manually change the PC's IP-address
-    in Control Panel and restarting the machine everytime it's
-    connected to a new instrument.
+    The buffer used to get data out of the device consist only of uint32s
+    (most likely to keep its layout simple). To transfer a float, the
+    EClib library uses a trick, wherein the value of the float is saved as
+    a uint32, by giving the uint32 the integer values, whose
+    bit-representation corresponds to the float that it should
+    describe. This function is used to convert the integer back to the
+    corresponding float.
+
+    NOTE: This trick can also be performed with ctypes along the lines of:
+    ``c_float.from_buffer(c_uint32(numeric))``, but in this driver the
+    library version is used.
 
     Args:
-        instrument_ip (str): Instrument's IP-address, 
-            e.g. '192.168.0.1'
+        numeric (int): Integer representing a float
+    
+    Returns:
+        float: The float value.
     """
+    #
+    c_out_float = ctypes.c_float()
 
-    ip = ipaddress.IPv4Address(instrument_ip)
+    status = driver.BL_ConvertNumericIntoSingle(
+        numeric, ctypes.byref(c_out_float)
+        )
 
-    network = ipaddress.IPv4Network()
+    assert_status_ok(driver=driver, return_code=status)
 
-    print(ip._ALL_ONES)
+    return c_out_float.value
 
 
 def parse_channel_info(channel_info: dict) -> dict:
     """Parses channel info code to a more readable format.
 
+    NOTE: Not implemented.
     A lot of this is legacy and I'm not strictly sure I need this,
     it's probably just cluttering the code. Might remove.
 
@@ -204,7 +198,8 @@ def parse_potentiostat_search(bytes_string: bytes) -> str:
         bytes_string (bytes): Result of BL_FindEChemEthDev()
 
     Returns:
-        str: IP-address of connected potentiostat.
+        ip (str): IP-address of connected potentiostat.
+        instrument_type (str): Instrument type, e.g. 'HCP-1005'.
     """
 
     parsed = bytes_string.raw.decode()
@@ -223,16 +218,110 @@ def parse_potentiostat_search(bytes_string: bytes) -> str:
     return ip, instrument_type
 
 
-def reverse_dict(dict_):
-    """Reverse the key/value status of a dict.
-    
-    Inherited from legacy code. TODO: Change to Enum.
+def parse_payload(
+    raw_data: dict,
+    desired_keys: list = ['Ewe', 'I', 'ElapsedTime']
+    ) -> dict:
+    parsed_data = dict()
+    """Parses data from instrument before it's dumped to db.
+
+    Args:
+        raw_data (dict): Raw data from instrument.
+        desired_keys (list, optional): Keys we want in payload.
+            Defaults to ['Ewe', 'I', 'ElapsedTime']
+
+    Returns:
+        dict: Payload.
     """
-    return dict([[v, k] for k, v in dict_.items()])
+
+    for desired_key in desired_keys:
+        parsed_data[desired_key] = raw_data[desired_key]
+
+    return parsed_data
+
+
+def _get_tecc_ecc_path(technique_name: str) -> str:
+    """Generates technique ecc-file path.
+
+    Helper function for parse_raw_params().
+
+    Args:
+        technique_name (str): Abbreviated technique name as presented
+            in documentation. Example: 'OCV'.
+
+    Returns:
+        str: (Relative) technique ecc-file path.
+    """
+    return f"{DRIVERPATH}{technique_name.lower()}.ecc"
+
+
+def _parse_exp_params(params: dict) -> ParsedParams:
+    """Parses incoming params from a dict to instrument-specific format.
+
+    Helper function for parse_raw_params().
+
+    Args:
+        params (dict): Incoming experiment params.
+
+    Returns:
+        Dict[str, structures.ECC_param]: _description_
+    """
+
+    parsed_params = dict()
+
+    for key, val in params.items():
+        label, type_ = val['ecc']
+        parsed_params[key] = (
+            structures.ECC_param(label, type_),
+            val['value'],
+            val['index']
+        )
+
+    return parsed_params
+
+
+def parse_raw_params(raw_params: dict):  # -> list(dict, str, str):
+    """Wrapper for parsing incoming experiment parameters.
+
+    Args:
+        raw_params (dict): Containing exp_id, technique name,
+            and detailed params procedure.
+
+    Returns:
+        parsed_params (Dict[str, structures.ECC_param]): Parsed experiment parameters.
+        tecc_ecc_path (str): Technique ecc-file path.
+        exp_id (str): Experiment ID.
+    """
+
+    parsed_params = _parse_exp_params(params=raw_params['params'])
+
+    tecc_ecc_path = _get_tecc_ecc_path(
+        technique_name=raw_params['technique']
+        )
+
+    exp_id = raw_params['exp_id']
+
+    return parsed_params, tecc_ecc_path, exp_id
+
+
+# def reverse_dict(dict_):
+#     """Reverse the key/value status of a dict.
+    
+#     Inherited from legacy code. TODO: Change to Enum.
+#     """
+#     return dict([[v, k] for k, v in dict_.items()])
 
 
 def structure_to_dict(structure: ctypes.Structure) -> dict:
-    """Convert a ctypes.Structure to a python dict."""
+    """Converts a ctypes.Structure to a python dict.
+    
+    Args:
+        structure (ctypes.Structure): Any ctypes.Structure with
+            populated _fields_.
+
+    Returns:
+        dict: Key-value pairs converted to a python-friendly dictionary.
+    """
 
     out = dict()
 

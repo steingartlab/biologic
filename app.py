@@ -1,10 +1,12 @@
 """Flask app connecting pithy container to biologic container"""
 
 import flask
-import json
 import logging
 import os
+import threading
 import werkzeug
+
+from biologic import experiment, potentiostats
 
 log_filename = "logs/logs.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -16,9 +18,11 @@ PORT = '5002'
 
 app = flask.Flask(__name__)
 
+pill = threading.Event()  # kills thread when called
+potentiostat = potentiostats.HCP1005()
+
 
 def configure_routes(app):
-    import wrapper
 
     @app.route('/')
     def hello_world():
@@ -38,11 +42,26 @@ def configure_routes(app):
             dict: waveform data
         """
 
+        if experiment.status == 'running':
+            return "Aborted: Experiment already running"
+
         params = flask.request.values.to_dict()
-        wrapper.run_ocv()
+        
+        experiment.run(
+            potentiostat=potentiostat,
+            raw_params=params,
+            pill=pill
+        )
 
+        return "Technique started"
 
-        return json.dumps(params)
+    @app.route('/stop')
+    def stop():
+        pill.set()
+        potentiostat.stop_channel()
+        potentiostat.disconnect()
+
+        return "Technique stoppped"
 
 
     @app.errorhandler(werkzeug.exceptions.BadRequest)

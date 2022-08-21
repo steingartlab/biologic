@@ -112,9 +112,9 @@ class VoltageRange(AutoEnum):
 
 
 class State(AutoEnum):
-    KBIO_STATE_STOP = auto()
-    KBIO_STATE_RUN = auto()
-    KBIO_STATE_PAUSE = auto()
+    stopped = auto()
+    running = auto()
+    paused = auto()
 
 
 class Technique(Enum):

@@ -1,4 +1,12 @@
 import ctypes
+from dataclasses import dataclass
+
+
+@dataclass
+class ECC_param:
+    """ECC param template"""
+    label: str
+    type_: type
 
 
 class ChannelInfos(ctypes.Structure):
@@ -109,48 +117,59 @@ class POD(ctypes.Structure):
     @property
     def keys(self):
         """Reproduce a dict behaviour."""
+        
         keys = (t[0] for t in self._fields_)
+
         return keys
 
     def __repr__(self):
         """Return class name and fields one at a line."""
+
         entries = str(self).split(', ')
         cls = type(self).__name__
         en_clair = f"{cls} :\n  " + '\n  '.join(entries)
+
         return en_clair
 
     def __str__(self):
         """Return key-value pairs separated by commas."""
+        
         entries = list()
+        
         for name in self.keys:
             entries.append(f"{name}={getattr(self,name)}")
+        
         en_clair = ', '.join(entries)
+        
         return en_clair
 
     def __getattr__(self, name):
         """Access Structure fields with nested attributes."""
         i = name.rfind('.')
+        
         if i == -1:
             # Structure should already have provided the first level attribute.
             raise AttributeError(
                 f"{type(self)} has no '{name}' attribute"
                 )
-        else:
-            o = getattr(self, name[:i])
-            v = getattr(o, name[i + 1:])
+        
+        o = getattr(self, name[:i])
+        v = getattr(o, name[i + 1:])
+
         return v
 
     def subset(self, *fields):
         """Create a dict from a selection of Structure fields."""
+        
         subset = dict()
+        
         if len(fields) == 0:
             # no field means all fields
             fields = self.keys
+        
         for name in fields:
             value = getattr(self, name)
-            subset += {
-                name: value
-                }
+            subset += {name: value}
         return subset
 
 

@@ -1,6 +1,1 @@
-{
-    "driver": {
-        "driverpath": "drivers\\",
-        "example_driver": "blfind64.dll"
-    }
-}
+{"driverpath": "drivers\\", "ip_address": "192.168.0.1"}

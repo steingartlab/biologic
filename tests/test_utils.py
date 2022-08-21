@@ -3,20 +3,20 @@ import ipaddress
 import json
 import pytest
 
-from biologic import exceptions, utils
-from biologic.potentiostats import InstrumentFinder
+from biologic import exceptions, structures, utils
+from tests.params import raw_params, dummy_raw_data, dummy_bytes_string
 
 with open('biologic/config.json') as f:
-    settings = json.load(f)
+    config = json.load(f)
 
-driverpath = settings['driver']['driverpath']
-driver_example = settings['driver']['example_driver']
+driverpath = config['driverpath']
+driver_example = 'EClib64.dll'
 
 dummy_reference_device = 'KBIO_DEV_HCP1005'
 dummy_device_code = 18
-# Matches the return string format when searching for connected potentiostats.
-# See section 5.1 in documentation for details.
-dummy_bytes_string = b'Ethernet$192.109.209.180$192.109.209.180$255.255.255.0$00.14.D8.01.08.6E$VMP3#0027$VMP3$0027$x$%'
+int_representing_a_float = 100
+
+dummy_tecc_ecc_path = 'drivers\\ocv.ecc'
 
 
 @pytest.fixture
@@ -27,8 +27,9 @@ def driver() -> ctypes.WinDLL:
 
 
 def test_get_error_message(driver: ctypes.WinDLL):
-    with pytest.raises(exceptions.BLFindError):
-        utils._get_error_message(driver=driver, error_code=-2)
+    message = utils._get_error_message(driver=driver, error_code=-2)
+
+    assert message.decode() == "connection in progress"
 
 
 def test_assert_device_type_ok():
@@ -50,8 +51,14 @@ def test_assert_status_ok(driver: ctypes.WinDLL):
 
 
 def test_assert_status_not_ok(driver: ctypes.WinDLL):
-    with pytest.raises(exceptions.BLFindError):
+    with pytest.raises(exceptions.ECLibError):
         utils.assert_status_ok(driver=driver, return_code=-2)
+
+
+def test_convert_numeric_to_single(driver):
+    utils.convert_numeric_to_single(
+        driver=driver, numeric=int_representing_a_float
+        )
 
 
 # @pytest.fixture
@@ -60,7 +67,6 @@ def test_assert_status_not_ok(driver: ctypes.WinDLL):
 #     finder.find()
 
 #     return finder.ip_address
-
 
 # def test_change_ip_address(ip_address: str):
 #     utils.change_ip_address(instrument_ip=ip_address)
@@ -71,7 +77,9 @@ def dummy_return_string() -> ctypes.create_string_buffer:
     return ctypes.create_string_buffer(dummy_bytes_string)
 
 
-def test_parse_potentiostat_search(dummy_return_string: ctypes.create_string_buffer):
+def test_parse_potentiostat_search(
+    dummy_return_string: ctypes.create_string_buffer
+    ):
     ip_address_returned, instrument_type = utils.parse_potentiostat_search(
         bytes_string=dummy_return_string
         )
@@ -83,16 +91,49 @@ def test_parse_potentiostat_search(dummy_return_string: ctypes.create_string_buf
 
     assert isinstance(ip_address, ipaddress.IPv4Address)
 
+
+def test_parse_payload():
+    payload = utils.parse_payload(raw_data=dummy_raw_data)
+
+    assert isinstance(payload, dict)
+    assert payload['Ewe'] == 3.1290981769561768
+    assert len(payload) == 3
+
+
+def test_parse_exp_params():
+    parsed_params = utils._parse_exp_params(
+        params=raw_params['params']
+        )
+
+    assert isinstance(parsed_params, dict)
+    assert isinstance(parsed_params['duration'][0], structures.ECC_param)
+
+
+def test_get_tecc_ecc_path():
+    tecc_ecc_path = utils._get_tecc_ecc_path(
+        technique_name=raw_params['technique']
+    )
+
+    assert tecc_ecc_path == dummy_tecc_ecc_path
+
+
+def test_parse_raw_params():
+    utils.parse_raw_params(raw_params=raw_params)
+
+
 # def test_reverse_dict():
 #     pass
-    # This function is suboptimal and will be rewritten as an Enum
+# This function is suboptimal and will be rewritten as an Enum
+
 
 @pytest.fixture
 def structure() -> ctypes.Structure:
+
     class Structure(ctypes.Structure):
         _fields_ = [('key1', ctypes.c_int8), ('key2', ctypes.c_bool)]
 
     return Structure
+
 
 def test_structure_to_dict(structure: ctypes.Structure):
     dict_ = utils.structure_to_dict(structure=structure)
