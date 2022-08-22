@@ -4,7 +4,7 @@
 
 Ever wanted to programatically control your potentiostat? You've come to the right place, for this library contains functionality for interfacing with potentiostats from [BioLogic](https://www.biologic.net/).
 
-## Acknoledgement
+## Acknowledgement
 
 This library is in part built upon previous work by vores danske venner hos DTU: [PyExpLabSys](https://github.com/CINF/PyExpLabSys). It also borrows from the OEM's official examples.
 
@@ -14,7 +14,7 @@ Potentiostats from our comrades across the pond at BioLogic are second to none. 
 
 There are three main reasons for wanting to use a pseudo-CLI over a GUI:
 
-(1): **Data Automation**. We cycle a lot of cells. Like, a lot. As such, we have a lot of data. Time is a valueable commodity and we'd rather spend our time gaining insights from our experiments, rather than spending it manually uploading to our server ([drops](https://github.com/dansteingart/drops)).
+(1): **Data Automation**. We cycle a lot of cells. Like, a lot. As such, we have a lot of data. Time is a valuable commodity and we'd rather spend our time gaining insights from our experiments, rather than spending it manually uploading to our server ([drops](https://github.com/dansteingart/drops)).
 
 Sometimes the OEM doesn't provide an SDK/API, in which case we must resort to scrapers. BioLogic _does_ provide one. They even provide a suite of minimal examples in their [excellent documentation](https://www.biologic.net/support-software/ec-lab-oem-development-package/) to get one started.
 
