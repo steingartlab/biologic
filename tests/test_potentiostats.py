@@ -1,227 +1,195 @@
-"""The HCP-1005 only contains a single channel, which simplifies testing a bit.
-Would have to be expanded slightly if this library were to be generalized.
+"""Requires the PC to be physically connected via ethernet to an
+HCP-1005 potentiostat in order for this testing module to pass. 
 """
 
-import ctypes
 import ipaddress
 import json
 import pytest
 
-from biologic import exceptions, potentiostats, techniques
+from biologic import techniques, utils
+from biologic.potentiostats import InstrumentFinder, HCP1005, Config
+from biologic.structures import EccParams
+from tests.params import raw_params
 
-with open('biologic/config.json') as f:
-    settings = json.load(f)
+############################################################################
+'''Boilerplate'''
 
-driverpath = settings['driver']['driverpath']
-driver_example = settings['driver']['example_driver']
+with open('biologic\\config.json') as f:
+    config = json.load(f)
 
-# Matches the return string format when searching for connected potentiostats.
-# See section 5.1 in documentation for details.
-dummy_bytes_string = b'Ethernet$192.109.209.180$192.109.209.180$255.255.255.0$00.14.D8.01.08.6E$VMP3#0027$VMP3$0027$x$%'
-dummy_device_code = 18
-dummy_reference_device = 'KBIO_DEV_HCP1005'
+type_ = 'KBIO_DEV_HCP1005'
+ip_address = config['ip_address']
 channels = [1]
-# label =
-# value =
-# index =
-# tecc_param =
 
+DRIVERPATH = 'drivers\\'
+technique_path = DRIVERPATH + 'ocv.ecc'
 
-def test_assert_device_type_ok():
-    potentiostats.assert_device_type_ok(
-        device_code=dummy_device_code,
-        reference_device=dummy_reference_device
-        )
-
-
-def test_assert_device_type_not_ok():
-    with pytest.raises(exceptions.ECLibCustomException):
-        potentiostats.assert_device_type_ok(
-            device_code=1, reference_device=dummy_reference_device
-            )
-
-
-@pytest.fixture
-def driver():
-    driver = ctypes.WinDLL(driverpath + driver_example)
-
-    return driver
-
-
-def test_get_error_message(driver):
-    with pytest.raises(exceptions.BLFindError):
-        potentiostats._get_error_message(driver=driver, error_code=-2)
-
-
-def test_assert_status_ok(driver):
-    potentiostats.assert_status_ok(driver=driver, return_code=0)
-
-
-def test_assert_status_not_ok(driver):
-    with pytest.raises(exceptions.BLFindError):
-        potentiostats.assert_status_ok(driver=driver, return_code=-2)
-
-
-@pytest.fixture
-def dummy_return_string():
-    return ctypes.create_string_buffer(dummy_bytes_string)
-
-
-def test_parse_potentiostat_search(dummy_return_string):
-    ip_address_returned = potentiostats.parse_potentiostat_search(
-        bytes_string=dummy_return_string
-        )
-
-    ip_address = ipaddress.ip_address(ip_address_returned)
-
-    assert isinstance(ip_address, ipaddress.IPv4Address)
+############################################################################
+'''Fixtures'''
 
 
 @pytest.fixture
 def finding_instance():
-    instance_ = potentiostats.InstrumentFinder()
+    instance_ = InstrumentFinder()
 
     return instance_
 
 
-# Integration
-def test_successful_finding(finding_instance):
-    ip_address_returned = finding_instance.find()
+@pytest.fixture
+def finder():
+    finder = InstrumentFinder()
+    finder.find()
 
-    assert isinstance(ip_address_returned, str)
+    return finder
 
-    ip_address = ipaddress.ip_address(ip_address_returned)
+
+@pytest.fixture
+def pstat_instance():
+    pstat_instance = HCP1005()
+
+    return pstat_instance
+
+
+@pytest.fixture
+def connection(pstat_instance: HCP1005):
+    pstat_instance.connect(ip_address=ip_address)
+
+    yield pstat_instance
+
+    # Teardown
+    pstat_instance.disconnect()
+
+
+@pytest.fixture
+def technique() -> EccParams:
+    parsed_params, _, _ = utils.parse_raw_params(raw_params=raw_params)
+    c_technique_params = techniques.set_technique_params(
+        parsed_params
+        )
+
+    return c_technique_params
+
+
+@pytest.fixture
+def loaded_technique(connection: HCP1005, technique: EccParams):
+    connection.stop_channel()
+    connection.load_technique(
+        technique_path=technique_path, c_tecc_params=technique
+        )
+
+    return connection
+
+
+@pytest.fixture
+def started_channel(loaded_technique: HCP1005):
+    loaded_technique.start_channel()
+
+    yield loaded_technique
+
+    loaded_technique.stop_channel()
+
+
+@pytest.fixture
+def config():
+    config = Config(type=type_)
+
+    config.connect(ip_address=ip_address)
+
+    return config
+
+
+############################################################################
+'''Unit tests'''
+
+
+def test_successful_finding(finding_instance: InstrumentFinder):
+    finding_instance.find()
+
+    assert isinstance(finding_instance.instrument_type, str)
+    assert isinstance(finding_instance.ip_address, str)
+
+    ip_address = ipaddress.ip_address(finding_instance.ip_address)
 
     assert isinstance(ip_address, ipaddress.IPv4Address)
 
 
-# ####################################################
+def test_get_error_status(config: Config):
+    config.get_error_status()
 
 
-@pytest.fixture
-def ip_address():
-    finding_instance = potentiostats.InstrumentFinder()
-    ip_address = finding_instance.find()
-
-    return ip_address
-
-
-@pytest.fixture
-def hcp1005_instance():
-    hcp1005_instance = potentiostats.HCP1005()
-
-    return hcp1005_instance
-
-
-def test_connect(hcp1005_instance, ip_address):
-    hcp1005_instance.connect(ip_address=ip_address)
-
-
-@pytest.fixture
-def connection(ip_address):
-    hcp1005_instance = potentiostats.HCP1005()
-    hcp1005_instance.connect(ip_address=ip_address)
-
-    yield hcp1005_instance
-
-    # Teardown
-    hcp1005_instance.disconnect()
-
-
-def test_test_connection(connection):
-    connection.test_connection()
-
-
-def test_disconnect(connection):
-    connection.disconnect()
-
-
-def test_load_firmware(connection):
-    c_results = connection.load_firmware(
-        channels=channels, force_reload=True
-        )
-
-    assert sum(c_results) == 0
-
-
-def test_get_channels_plugged(connection):
-    channels_plugged = connection.get_channels_plugged()
-
-    assert channels_plugged == [True]
-
-
-def test_is_channel_plugged(connection):
-    is_plugged = connection.is_channel_plugged()
-
-    assert is_plugged is True
-
-
-def test_get_channel_infos(connection):
-    channel_info = connection.get_channel_info()
-
-    assert isinstance(channel_info, dict)
-
-
-def test_get_message(connection):
-    message = connection.get_message()
+def test_get_message(config: Config):
+    message = config.get_message()
 
     assert isinstance(message, str)
 
 
-# def test_get_error_status(connection):
-#     connection.get_error_status()
+def test_test_connection(config: Config):
+    config.test_connection()
 
 
-@pytest.fixture
-def technique():
-    technique = techniques.CA()
-
-    return technique
+def test_test_communication_speed(config: Config):
+    config.test_communication_speed()
 
 
-def test_load_technique(connection, technique):
-    connection.load_technique(technique=technique)
+def test_load_firmware(config: Config):
+    c_results = config.load_firmware(channels=channels)
 
-# def test_define_bool_parameter(connection):
-#     connection.define_bool_parameter(
-#         label=label,
-#         value=value,
-#         index=index,
-#         tecc_param=tecc_param
-#     )
-
-# def test_define_single_parameter(connection):
-
-# def test_define_integer_parameter(connection):
+    assert sum(c_results) == 0
 
 
-# def test_start_channel(connection):
-#     connection.start_channel()
+def test_get_channels_plugged(config: Config):
+    channels_plugged = config.get_channels_plugged()
+
+    assert channels_plugged == [True]
 
 
-@pytest.fixture
-def started_channel():
-    hcp1005_instance = potentiostats.HCP1005()
-    hcp1005_instance.connect(ip_address=ip_address)
+def test_is_channel_plugged(config: Config):
+    is_plugged = config.is_channel_plugged()
 
-    hcp1005_instance.start_channel()
+    assert is_plugged is True
 
-    yield hcp1005_instance
 
+def test_get_channel_info(config: Config):
+    channel_info = config.get_channel_info()
+
+    assert isinstance(channel_info, dict)
+
+
+################################################
+
+def test_get_current_values_wo_starting(connection: HCP1005):
     connection.stop_channel()
+    current_values = connection.get_current_values()
+
+    assert current_values['State'] == 0
+
+def test_connect(pstat_instance: HCP1005, finder: InstrumentFinder):
+    pstat_instance.connect(ip_address=finder.ip_address)
 
 
-# def test_get_current_values(started_channel):
-#     current_values = started_channel.get_current_values()
+def test_load_technique(connection: HCP1005, technique: EccParams):
+    connection.load_technique(
+        technique_path=technique_path, c_tecc_params=technique
+        )
 
-#     assert isinstance(current_values, dict)
 
-# def test_get_data(started_channel):
+def test_start_channel(loaded_technique: HCP1005):
+    loaded_technique.start_channel()
+
+
+def test_get_current_values(started_channel: HCP1005):
+    current_values = started_channel.get_current_values()
+
+    assert isinstance(current_values, dict)
+
+
+def test_stop_channel(started_channel: HCP1005):
+    started_channel.stop_channel()
+
+
+# def test_get_data(started_channel: potentiostats.HCP1005):
 #     something = started_channel.get_data()
 
 
-# def test_convert_numeric_to_single(connection):
-
-
-# def test_stop_channel(started_channel):
-#     started_channel.stop_channel()
+def test_disconnect(connection: HCP1005):
+    connection.disconnect()

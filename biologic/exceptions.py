@@ -34,24 +34,23 @@ class ECLibError(ECLibException):
 
     def __init__(self, error_code, message):
         super(ECLibError, self).__init__(
-            error_code=error_code,
-            message=message
-        )
+            error_code=error_code, message=message
+            )
 
 
 class BLFindError(ECLibException):
+
     def __init__(self, error_code, message):
         super(BLFindError, self).__init__(
-            error_code=error_code,
-            message=message
-        )    
+            error_code=error_code, message=message
+            )
 
 
 class ECLibCustomException(ECLibException):
     """Exceptions that does not originate from the lib"""
 
-    def __init__(self, error_code, message):
+    def __init__(self, error_code, message: str = None):
+
         super(ECLibCustomException, self).__init__(
-            error_code=error_code,
-            message=message
-        )
+            error_code=error_code, message=message
+            )

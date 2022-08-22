@@ -133,3 +133,5 @@ dmypy.json
 logs/
 
 EC-Lab Development Package
+biologic/config.py
+biologic/config.json

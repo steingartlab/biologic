@@ -1,4 +1,8 @@
+"""Constants to aid readability, esp for debugging."""
+
+from dataclasses import dataclass
 from enum import Enum, auto
+import enum
 
 
 class AutoEnum(Enum):
@@ -9,35 +13,17 @@ class AutoEnum(Enum):
             return last_values[-1] + 1
         return 0
 
+@dataclass
+class ECC_param:
+    """ECC param template"""
+    label: str
+    type_: type
 
-class Device(AutoEnum):
-    KBIO_DEV_VMP = auto()
-    KBIO_DEV_VMP2 = auto()
-    KBIO_DEV_MPG = auto()
-    KBIO_DEV_BISTA = auto()
-    KBIO_DEV_MCS200 = auto()
-    KBIO_DEV_VMP3 = auto()
-    KBIO_DEV_VSP = auto()
-    KBIO_DEV_HCP803 = auto()
-    KBIO_DEV_EPP400 = auto()
-    KBIO_DEV_EPP4000 = auto()
-    KBIO_DEV_BISTAT2 = auto()
-    KBIO_DEV_FCT150S = auto()
-    KBIO_DEV_VMP300 = auto()
-    KBIO_DEV_SP50 = auto()
-    KBIO_DEV_SP150 = auto()
-    KBIO_DEV_FCT50S = auto()
-    KBIO_DEV_SP300 = auto()
-    KBIO_DEV_CLB500 = auto()
-    KBIO_DEV_HCP1005 = auto()
-    KBIO_DEV_CLB2000 = auto()
-    KBIO_DEV_VSP300 = auto()
-    KBIO_DEV_SP200 = auto()
-    KBIO_DEV_MPG2 = auto()
-    KBIO_DEV_SP100 = auto()
-    KBIO_DEV_MOSLED = auto()
-    KBIO_DEV_SP240 = auto()
-    KBIO_DEV_UNKNOW = auto()
+
+class Device(Enum):
+    """Only including implemented devices."""
+    KBIO_DEV_SP150 = 14
+    KBIO_DEV_HCP1005 = 18
 
 
 class Firmware(Enum):
@@ -112,65 +98,15 @@ class VoltageRange(AutoEnum):
 
 
 class State(AutoEnum):
-    KBIO_STATE_STOP = auto()
-    KBIO_STATE_RUN = auto()
-    KBIO_STATE_PAUSE = auto()
+    stopped = auto()
+    running = auto()
+    paused = auto()
 
 
 class Technique(Enum):
+    """Only including implemented techniques."""
     KBIO_TECHID_NONE = 0
     KBIO_TECHID_OCV = 100
-    KBIO_TECHID_CA = auto()
-    KBIO_TECHID_CP = auto()
-    KBIO_TECHID_CV = auto()
-    KBIO_TECHID_PEIS = auto()
-    KBIO_TECHID_POTPULSE = auto()
-    KBIO_TECHID_GALPULSE = auto()
-    KBIO_TECHID_GEIS = auto()
-    KBIO_TECHID_STACKPEIS_SLAVE = auto()
-    KBIO_TECHID_STACKPEIS = auto()
-    KBIO_TECHID_CPOWER = auto()
-    KBIO_TECHID_CLOAD = auto()
-    KBIO_TECHID_FCT = auto()
-    KBIO_TECHID_SPEIS = auto()
-    KBIO_TECHID_SGEIS = auto()
-    KBIO_TECHID_STACKPDYN = auto()
-    KBIO_TECHID_STACKPDYN_SLAVE = auto()
-    KBIO_TECHID_STACKGDYN = auto()
-    KBIO_TECHID_STACKGEIS_SLAVE = auto()
-    KBIO_TECHID_STACKGEIS = auto()
-    KBIO_TECHID_STACKGDYN_SLAVE = auto()
-    KBIO_TECHID_CPO = auto()
-    KBIO_TECHID_CGA = auto()
-    KBIO_TECHID_COKINE = auto()
-    KBIO_TECHID_PDYN = auto()
-    KBIO_TECHID_GDYN = auto()
-    KBIO_TECHID_CVA = auto()
-    KBIO_TECHID_DPV = auto()
-    KBIO_TECHID_SWV = auto()
-    KBIO_TECHID_NPV = auto()
-    KBIO_TECHID_RNPV = auto()
-    KBIO_TECHID_DNPV = auto()
-    KBIO_TECHID_DPA = auto()
-    KBIO_TECHID_EVT = auto()
-    KBIO_TECHID_LP = auto()
-    KBIO_TECHID_GC = auto()
-    KBIO_TECHID_CPP = auto()
-    KBIO_TECHID_PDP = auto()
-    KBIO_TECHID_PSP = auto()
-    KBIO_TECHID_ZRA = auto()
-    KBIO_TECHID_MIR = auto()
-    KBIO_TECHID_PZIR = auto()
-    KBIO_TECHID_GZIR = auto()
-    KBIO_TECHID_LOOP = 150
-    KBIO_TECHID_TO = auto()
-    KBIO_TECHID_TI = auto()
-    KBIO_TECHID_TOS = auto()
-    KBIO_TECHID_CPLIMIT = 155
-    KBIO_TECHID_GDYNLIMIT = auto()
-    KBIO_TECHID_CALIMIT = auto()
-    KBIO_TECHID_PDYNLIMIT = auto()
-    KBIO_TECHID_LASV = auto()
-    KBIO_TECHID_MP = 167
-    KBIO_TECHID_CASG = 169
-    KBIO_TECHID_CASP = auto()
+    KBIO_TECHID_CA = 101
+    KBIO_TECHID_CP = 102
+    KBIO_TECHID_CV = 103

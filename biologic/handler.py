@@ -4,6 +4,7 @@ import ctypes
 
 from biologic import constants, exceptions
 
+
 class KBIOData:
     """Class used to represent data obtained with a get_data call
     The data can be obtained as lists of floats through attributes on this
@@ -37,7 +38,7 @@ class KBIOData:
         """
 
         technique_id = c_data_infos.TechniqueID
-        self.technique = constants.Technique[technique_id]
+        self.technique = constants.Technique[technique_id].value
 
         # Technique 0 means no data, get_data checks for this, so just return
         if technique_id == 0:

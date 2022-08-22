@@ -1,705 +1,154 @@
-from collections import namedtuple
-import ctypes
+"""Parses experiment parameters from  a raw dict form to a instrument-specific
+format.
+
+Function set_technique_params() is the only one that should be called externally.
+All others can be considered helper functions.
+"""
+
+from ctypes import Array, c_float, c_bool, c_int32, create_string_buffer, byref, WinDLL
 import json
+from typing import Union
 
-from biologic import constants, exceptions, structures
+from biologic.structures import EccParam, EccParams
+from biologic.utils import ParsedParams
 
-with open('biologic/config.json') as f:
+with open('biologic\\config.json', 'r') as f:
     settings = json.load(f)
 
-driverpath = settings['driver']['driverpath']
+DRIVERPATH = settings['driverpath']
 
-DataField = namedtuple('DataField', ['name', 'type'])
-
-TechniqueArgument = namedtuple(
-    'TechniqueArgument',
-    ['label', 'type', 'value', 'check', 'check_argument']
-    )
+driver = WinDLL(DRIVERPATH + 'EClib64.dll')
 
 
-class Technique:
-    """Base class for techniques
-    All specific technique classes inherits from this class.
-    Properties available on the object:
-    * technique_filename (str): The name of the technique filename
-    * args (tuple): Tuple containing the Python version of the
-      parameters (see :meth:`.__init__` for details)
-    * c_args (array of :class:`.TECCParam`): The c-types array of
-      :class:`.TECCParam`
-    A specific technique, that inherits from this class **must** overwrite the
-    **data_fields** class variable. It describes what the form is, of the data
-    that the technique can receive. The variable should be a dict on the
-    following form:
-    * Some techniques, like :class:`.OCV`, have different data fields depending
-      on the series of the instrument. In these cases the dict must contain
-      both a 'wmp3' and a 'sp300' key.
-    * For cases where the instrument class distinction mentioned above does not
-      exist, like e.g. for :class:`.CV`, one can simply define a 'common' key.
-    * All three cases above assume that the first field of the returned data is
-      a specially formatted ``time`` field, which must not be listed directly.
-    * Some techniques, like e.g. :class:`.SPEIS` returns data for two different
-      processes, one of which does not contain the ``time`` field (it is
-      assumed that the process that contains ``time`` is 0 and the one that
-      does not is 1). In this case there must be a 'common' and a 'no-time' key
-      (see the implementation of :class:`.SPEIS` for details).
-    All of the entries in the dict must point to an list of
-    :class:`.DataField` named tuples, where the two arguments are the name and
-    the C type of the field (usually :py:class:`c_float <ctypes.c_float>` or
-    :py:class:`c_uint32 <ctypes.c_uint32>`). The list of fields must be in the
-    order the data fields is specified in the :ref:`specification
-    <specification>`.
+def _generate_c_value(
+    value: Union[float, bool, int]
+    ) -> Union[c_float, c_bool, c_int32]:
+    """Generates a ctypes version of value passed to DefineXXXParameter().
+
+    Helper function for _define_parameter().
+
+    Args:
+        value (Union[float, bool, int]): Parameter value.
+
+    Returns:
+        Union[ctypes.c_float, ctypes.c_bool, ctypes.c_int32]: C-type parameter value.
     """
 
-    data_fields = None
+    _function = {
+        int: c_int32,
+        float: c_float,
+        bool: c_bool
+        }[type(value)]
 
-    def __init__(self, args, technique_filename):
-        """Initialize a technique
-        Args:
-            args (tuple): Tuple of technique arguments as TechniqueArgument
-                instances
-            technique_filename (str): The name of the technique filename.
-                .. note:: This must be the vmp3 series version i.e. name.ecc
-                  NOT name4.ecc, the replacement of technique file names are
-                  taken care of in load technique
-        """
-        self.args = args
-        # The arguments must be converted to an array of TECCParam
-        self._c_args = None
-        self.technique_filename = driverpath + technique_filename
+    c_value = _function(value)
 
-    def c_args(self, instrument):
-        """Return the arguments struct
-        Args:
-            instrument (:class:`GeneralPotentiostat`): Instrument instance,
-                should be an instance of a subclass of
-                :class:`GeneralPotentiostat`
-        Returns:
-            array of :class:`TECCParam`: An ctypes array of :class:`TECCParam`
-        Raises:
-            ECLibCustomException: Where the error codes indicate the following:
-                * -10000 means that an :class:`TechniqueArgument` failed the
-                  'in' test
-                * -10001 means that an :class:`TechniqueArgument` failed the
-                  '>=' test
-                * -10002 means that an :class:`TechniqueArgument` failed the
-                  'in_float_range' test
-                * -10010 means that it was not possible to find a conversion
-                  function for the defined type
-                * -10011 means that the value cannot be converted with the
-                  conversion function
-        """
-        if self._c_args is None:
-            self._init_c_args(instrument)
-        return self._c_args
-
-    def _init_c_args(self, instrument):
-        """Initialize the arguments struct
-        Args:
-            instrument (:class:`GeneralPotentiostat`): Instrument instance,
-                should be an instance of a subclass of
-                :class:`GeneralPotentiostat`
-        """
-        # If it is a technique that has multistep arguments, get the number of
-        # steps
-        step_number = 1
-        for arg in self.args:
-            if arg.label == 'Step_number':
-                step_number = arg.value
-
-        constructed_args = []
-        for arg in self.args:
-            # Bounds check the argument
-            self._check_arg(arg)
-            # When type is dict, it means that type is a int_code -> value_str
-            # dict, that should be used to translate the str to an int by
-            # reversing it be able to look up codes from strs and replace
-            # value
-            if isinstance(arg.type, dict):
-                value = reverse_dict(arg.type)[arg.value]
-                param = structures.TEccParam()
-                instrument.define_integer_parameter(
-                    arg.label, value, 0, param
-                    )
-                constructed_args.append(param)
-                continue
-
-            # Get the appropriate conversion function, to populate the EccParam
-            stripped_type = arg.type.strip('[]')
-            try:
-                # Get the conversion method from the instrument instance, this
-                # is named something like defined_bool_parameter
-                conversion_function = getattr(
-                    instrument,
-                    'define_{}_parameter'.format(stripped_type)
-                    )
-            except AttributeError:
-                message = 'Unable to find parameter definitions function for '\
-                          'type: {}'.format(stripped_type)
-                raise exceptions.ECLibCustomException(message, -10010)
-
-            # If the parameter is not a multistep paramter, put the value in a
-            # list so we can iterate over it
-            if arg.type.startswith('[') and arg.type.endswith(']'):
-                values = arg.value
-            else:
-                values = [arg.value]
-
-            # Iterate over all the steps for the parameter (for most will just
-            # be 1)
-            for index in range(min(step_number, len(values))):
-                param = structures.TEccParam()
-                try:
-                    conversion_function(
-                        arg.label, values[index], index, param
-                        )
-                except exceptions.ECLibError:
-                    message = '{} is not a valid value for conversion to '\
-                              'type {} for argument \'{}\''.format(
-                                  values[index], stripped_type, arg.label)
-                    raise exceptions.ECLibCustomException(
-                        message, -10011
-                        )
-                constructed_args.append(param)
-
-        self._c_args = (structures.TEccParam *
-                        len(constructed_args))()
-        for index, param in enumerate(constructed_args):
-            self._c_args[index] = param
-
-    # def _init_c_args(self, instrument):
-    #     """Initialize the arguments struct
-    #     Args:
-    #         instrument (:class:`GeneralPotentiostat`): Instrument instance,
-    #             should be an instance of a subclass of
-    #             :class:`GeneralPotentiostat`
-    #     """
-
-    #     # If it is a technique that has multistep arguments, get the number of
-    #     # steps
-    #     step_number = 1
-    #     for arg in self.args:
-    #         if arg.label == 'Step_number':
-    #             step_number = arg.value
-
-    #     constructed_args = []
-    #     for arg in self.args:
-    #         # Bounds check the argument
-    #         self._check_arg(arg)
-
-    #         # When type is dict, it means that type is a int_code -> value_str
-    #         # dict, that should be used to translate the str to an int by
-    #         # reversing it be able to look up codes from strs and replace
-    #         # value
-    #         if isinstance(arg.type, dict):
-    #             value = reverse_dict(arg.type)[arg.value]
-    #             param = structures.TECCParam()
-    #             instrument.define_integer_parameter(
-    #                 arg.label, value, 0, param
-    #                 )
-    #             constructed_args.append(param)
-    #             continue
-    #         # Get the appropriate conversion function, to populate the EccParam
-    #         stripped_type = arg.type.strip('[]')
-
-    #         # Get the conversion method from the instrument instance, this
-    #         # is named something like defined_bool_parameter
-    #         conversion_function = getattr(
-    #             instrument,
-    #             'define_{}_parameter'.format(stripped_type)
-    #             )
-
-    #         # Iterate over all the steps for the parameter (for most will just
-    #         # be 1)
-    #         values = list(arg.value)
-    #         print(values)
-    #     #     for index in range(min(step_number, len(values))):
-    #     #         param = structures.TECCParam()
-    #     #         conversion_function(
-    #     #             label=arg.label,
-    #     #             value=values[index],
-    #     #             index=index,
-    #     #             tecc_param=param
-    #     #         )
-
-    #     #         constructed_args.append(param)
-
-    #     # self._c_args = (structures.TECCParam *
-    #     #                 len(constructed_args))()
-
-    #     # for index, param in enumerate(constructed_args):
-    #     #     self._c_args[index] = param
-
-    @staticmethod
-    def _check_arg(arg):
-        """Perform bounds check on a single argument"""
-        if arg.check is None:
-            return
-
-        # If the type is not a dict (used for constants) and indicates an array
-        elif not isinstance(arg.type, dict) and\
-             arg.type.startswith('[') and arg.type.endswith(']'):
-            values = arg.value
-        else:
-            values = [arg.value]
-
-        # Check arguments with a list of accepted values
-        if arg.check == 'in':
-            for value in values:
-                if value not in arg.check_argument:
-                    message = '{} is not among the valid values for \'{}\'. '\
-                              'Valid values are: {}'.format(
-                                  value, arg.label, arg.check_argument)
-                    raise exceptions.ECLibCustomException(
-                        message, -10000
-                        )
-            return
-
-        # Perform bounds check, if any
-        if arg.check == '>=':
-            for value in values:
-                if not value >= arg.check_argument:
-                    message = 'Value {} for parameter \'{}\' failed '\
-                              'check >={}'.format(
-                                  value, arg.label, arg.check_argument)
-                    raise exceptions.ECLibCustomException(
-                        message, -10001
-                        )
-            return
-
-        # Perform in two parameter range check: A < value < B
-        if arg.check == 'in_float_range':
-            for value in values:
-                if not arg.check_argument[
-                    0] <= value <= arg.check_argument[1]:
-                    message = 'Value {} for parameter \'{}\' failed '\
-                              'check between {} and {}'.format(
-                                  value, arg.label,
-                                  *arg.check_argument
-                              )
-                    raise exceptions.ECLibCustomException(
-                        message, -10002
-                        )
-            return
-
-        message = 'Unknown technique parameter check: {}'.format(
-            arg.check
-            )
-        raise exceptions.ECLibCustomException(message, -10002)
+    return c_value
 
 
-# Section 7.2 in the specification
-class OCV(Technique):
-    """Open Circuit Voltage (OCV) technique class.
-    The OCV technique returns data on fields (in order):
-    * time (float)
-    * Ewe (float)
-    * Ece (float) (only wmp3 series hardware)
+def _define_parameter(
+    label: str, value: Union[float, bool, int], index: int,
+    ecc_param: EccParam
+    ):
+    """Converts experiment parameters to appropriate to instrument-specific format.
+
+    Helper function for _make_ecc_param().
+
+    NOTE: No explicit return statement bc it uses a c-type buffer.
+
+    Args:
+        label (str): Parameter label.
+        value (value: Union[float, bool, int]): Parameter value.
+        index (int): 
+        param (EccParam): _description_
     """
 
-    #: Data fields definition
-    data_fields = {
-        'vmp3':
-            [
-                DataField('Ewe', ctypes.c_float),
-                DataField('Ece', ctypes.c_float)
-                ],
-        'sp300': [DataField('Ewe', ctypes.c_float)],
-        }
+    c_label = create_string_buffer(label.encode())
+    c_value = _generate_c_value(value=value)
 
-    def __init__(
-        self,
-        rest_time_T=10.0,
-        record_every_dE=10.0,
-        record_every_dT=0.1,
-        E_range='KBIO_ERANGE_AUTO'
-        ):
-        """Initialize the OCV technique
-        Args:
-            rest_time_t (float): The amount of time to rest (s)
-            record_every_dE (float): Record every dE (V)
-            record_every_dT  (float): Record evergy dT (s)
-            E_range (str): A string describing the E range to use, see the
-                :data:`E_RANGES` module variable for possible values
-        """
+    _function = {
+        int: driver.BL_DefineIntParameter,
+        float: driver.BL_DefineSglParameter,
+        bool: driver.BL_DefineBoolParameter,
+        }[type(value)]
 
-        args = (
-            TechniqueArgument(
-                'Rest_time_T', 'single', rest_time_T, '>=', 0
-                ),
-            TechniqueArgument(
-                'Record_every_dE', 'single', record_every_dE, '>=', 0
-                ),
-            TechniqueArgument(
-                'Record_every_dT', 'single', record_every_dT, '>=', 0
-                ),
-            TechniqueArgument(
-                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
-                ),
-            )
-        super(OCV, self).__init__(
-            args=args, technique_filename='ocv.ecc'
-            )
+    _function(c_label, c_value, index, byref(ecc_param))
 
 
-#:E range number to E range name translation dict
-E_RANGES = {
-    0: 'KBIO_ERANGE_2_5',
-    1: 'KBIO_ERANGE_5',
-    2: 'KBIO_ERANGE_10',
-    3: 'KBIO_ERANGE_AUTO'
-    }
-
-
-# Section 7.3 in the specification
-class CV(Technique):
-    """Cyclic Voltammetry (CV) technique class.
-    The CV technique returns data on fields (in order):
-    * time (float)
-    * Ec (float)
-    * I (float)
-    * Ewe (float)
-    * cycle (int)
+def _make_ecc_param(
+    param: ParsedParams, value: Union[float, bool, int], index: int
+    ) -> EccParam:
+    """Given an ECC_parm template, create and return an EccParam, with its value and index.
+    
+    Helper function for parse_technique_params().
     """
 
-    #:Data fields definition
-    data_fields = {
-        'common':
-            [
-                DataField('Ec', ctypes.c_float),
-                DataField('I', ctypes.c_float),
-                DataField('Ewe', ctypes.c_float),
-                DataField('cycle', ctypes.c_uint32),
-                ]
-        }
+    ecc_param = EccParam()
 
-    def __init__(
-        self,
-        vs_initial,
-        voltage_step,
-        scan_rate,
-        record_every_dE=0.1,
-        average_over_dE=True,
-        N_cycles=0,
-        begin_measuring_I=0.5,
-        end_measuring_I=1.0,
-        I_range='KBIO_IRANGE_AUTO',
-        E_range='KBIO_ERANGE_2_5',
-        bandwidth='KBIO_BW_5'
-        ):
-        r"""Initialize the CV technique::
-         E_we
-         ^
-         |       E_1
-         |       /\
-         |      /  \
-         |     /    \      E_f
-         | E_i/      \    /
-         |            \  /
-         |             \/
-         |             E_2
-         +----------------------> t
-        Args:
-            vs_initial (list): List (or tuple) of 5 booleans indicating
-                whether the current step is vs. the initial one
-            voltage_step (list): List (or tuple) of 5 floats (Ei, E1, E2, Ei,
-                Ef) indicating the voltage steps (V)
-            scan_rate (list): List (or tuple) of 5 floats indicating the scan
-                rates (mV/s)
-            record_every_dE (float): Record every dE (V)
-            average_over_dE (bool): Whether averaging should be performed over
-                dE
-            N_cycles (int): The number of cycles
-            begin_measuring_I (float): Begin step accumulation, 1 is 100%
-            end_measuring_I (float): Begin step accumulation, 1 is 100%
-            I_Range (str): A string describing the I range, see the
-                :data:`I_RANGES` module variable for possible values
-            E_range (str): A string describing the E range to use, see the
-                :data:`E_RANGES` module variable for possible values
-            Bandwidth (str): A string describing the bandwidth setting, see the
-                :data:`BANDWIDTHS` module variable for possible values
-        Raises:
-            ValueError: If vs_initial, voltage_step and scan_rate are not all
-                of length 5
-        """
-        for input_name in ('vs_initial', 'voltage_step', 'scan_rate'):
-            if len(locals()[input_name]) != 5:
-                message = 'Input \'{}\' must be of length 5, not {}'.format(
-                    input_name, len(locals()[input_name])
-                    )
-                raise ValueError(message)
-        args = (
-            TechniqueArgument(
-                'vs_initial', '[bool]', vs_initial, 'in',
-                [True, False]
-                ),
-            TechniqueArgument(
-                'Voltage_step', '[single]', voltage_step, None, None
-                ),
-            TechniqueArgument(
-                'Scan_Rate', '[single]', scan_rate, '>=', 0.0
-                ),
-            TechniqueArgument(
-                'Scan_number', 'integer', 2, None, None
-                ),
-            TechniqueArgument(
-                'Record_every_dE', 'single', record_every_dE, '>=',
-                0.0
-                ),
-            TechniqueArgument(
-                'Average_over_dE', 'bool', average_over_dE, 'in',
-                [True, False]
-                ),
-            TechniqueArgument(
-                'N_Cycles', 'integer', N_cycles, '>=', 0
-                ),
-            TechniqueArgument(
-                'Begin_measuring_I', 'single', begin_measuring_I,
-                'in_float_range', (0.0, 1.0)
-                ),
-            TechniqueArgument(
-                'End_measuring_I', 'single', end_measuring_I,
-                'in_float_range', (0.0, 1.0)
-                ),
-            TechniqueArgument(
-                'I_Range', I_RANGES, I_range, 'in', I_RANGES.values()
-                ),
-            TechniqueArgument(
-                'E_Range', E_RANGES, E_range, 'in', E_RANGES.values()
-                ),
-            TechniqueArgument(
-                'Bandwidth', BANDWIDTHS, bandwidth, 'in',
-                BANDWIDTHS.values()
-                ),
-            )
-        super(CV, self).__init__(args, 'cv.ecc')
-
-#:I range number to I range name translation dict
-I_RANGES = {
-    0: 'KBIO_IRANGE_100pA',
-    1: 'KBIO_IRANGE_1nA',
-    2: 'KBIO_IRANGE_10nA',
-    3: 'KBIO_IRANGE_100nA',
-    4: 'KBIO_IRANGE_1uA',
-    5: 'KBIO_IRANGE_10uA',
-    6: 'KBIO_IRANGE_100uA',
-    7: 'KBIO_IRANGE_1mA',
-    8: 'KBIO_IRANGE_10mA',
-    9: 'KBIO_IRANGE_100mA',
-    10: 'KBIO_IRANGE_1A',
-    11: 'KBIO_IRANGE_BOOSTER',
-    12: 'KBIO_IRANGE_AUTO',
-    13: 'KBIO_IRANGE_10pA',  # IRANGE_100pA + Igain x10
-    14: 'KBIO_IRANGE_1pA',  # IRANGE_100pA + Igain x100
-}
-BANDWIDTHS = {
-    1: 'KBIO_BW_1',
-    2: 'KBIO_BW_2',
-    3: 'KBIO_BW_3',
-    4: 'KBIO_BW_4',
-    5: 'KBIO_BW_5',
-    6: 'KBIO_BW_6',
-    7: 'KBIO_BW_7',
-    8: 'KBIO_BW_8',
-    9: 'KBIO_BW_9'
-    }
-# Section 7.5 in the specification
-class CP(Technique):
-    """Chrono-Potentiometry (CP) technique class.
-    The CP technique returns data on fields (in order):
-    * time (float)
-    * Ewe (float)
-    * I (float)
-    * cycle (int)
-    """
-
-    #: Data fields definition
-    data_fields = {
-        'common':
-            [
-                DataField('Ewe', ctypes.c_float),
-                DataField('I', ctypes.c_float),
-                DataField('cycle', ctypes.c_uint32),
-                ]
-        }
-
-    def __init__(
-        self,
-        current_step=(50E-6,),
-        vs_initial=(False,),
-        duration_step=(10.0,),
-        record_every_dT=0.1,
-        record_every_dE=0.001,
-        N_cycles=0,
-        I_range='KBIO_IRANGE_100uA',
-        E_range='KBIO_ERANGE_2_5',
-        bandwidth='KBIO_BW_5'
-        ):
-        """Initialize the CP technique
-        NOTE: The current_step, vs_initial and duration_step must be a list or
-        tuple with the same length.
-        Args:
-            current_step (list): List (or tuple) of floats indicating the
-                current steps (A). See NOTE above.
-            vs_initial (list): List (or tuple) of booleans indicating whether
-                the current steps is vs. the initial one. See NOTE above.
-            duration_step (list): List (or tuple) of floats indicating the
-                duration of each step (s). See NOTE above.
-            record_every_dT (float): Record every dT (s)
-            record_every_dE (float): Record every dE (V)
-            N_cycles (int): The number of times the technique is REPEATED.
-                NOTE: This means that the default value is 0 which means that
-                the technique will be run once.
-            I_Range (str): A string describing the I range, see the
-                :data:`I_RANGES` module variable for possible values
-            E_range (str): A string describing the E range to use, see the
-                :data:`E_RANGES` module variable for possible values
-            Bandwidth (str): A string describing the bandwidth setting, see the
-                :data:`BANDWIDTHS` module variable for possible values
-        Raises:
-            ValueError: On bad lengths for the list arguments
-        """
-        if not len(current_step) == len(vs_initial
-                                       ) == len(duration_step):
-            message = 'The length of current_step, vs_initial and '\
-                      'duration_step must be the same'
-            raise ValueError(message)
-
-        # TODO: Edit last three lines
-        args = (
-            TechniqueArgument(
-                'Current_step', '[single]', current_step, None, None
-                ),
-            TechniqueArgument(
-                'vs_initial', '[bool]', vs_initial, 'in',
-                [True, False]
-                ),
-            TechniqueArgument(
-                'Duration_step', '[single]', duration_step, '>=', 0
-                ),
-            TechniqueArgument(
-                'Step_number', 'integer', len(current_step), 'in',
-                range(99)
-                ),
-            TechniqueArgument(
-                'Record_every_dT', 'single', record_every_dT, '>=', 0
-                ),
-            TechniqueArgument(
-                'Record_every_dE', 'single', record_every_dE, '>=', 0
-                ),
-            TechniqueArgument(
-                'N_Cycles', 'integer', N_cycles, '>=', 0
-                ),
-            TechniqueArgument(
-                'I_Range', constants.CurrentRange('add'), I_range,
-                'in',
-                constants.CurrentRange(...).value
-                ),
-            TechniqueArgument(
-                'E_Range', constants.VoltageRange, E_range, 'in',
-                constants.VoltageRange.values()
-                ),
-            TechniqueArgument(
-                'Bandwidth', constants.Bandwidth, bandwidth, 'in',
-                constants.Bandwidth.values()
-                ),
-            )
-        super(CP, self).__init__(args, 'cp.ecc')
-
-
-# Section 7.6 in the specification
-class CA(Technique):
-    """Chrono-Amperometry (CA) technique class.
-    The CA technique returns data on fields (in order):
-    * time (float)
-    * Ewe (float)
-    * I (float)
-    * cycle (int)
-    """
-
-    #:Data fields definition
-    data_fields = {
-        'common':
-            [
-                DataField('Ewe', ctypes.c_float),
-                DataField('I', ctypes.c_float),
-                DataField('cycle', ctypes.c_uint32)
-                ]
-        }
-
-    def __init__(
-        self,
-        voltage_step=(0.35,),
-        vs_initial=(False,),
-        duration_step=(10.0,),
-        record_every_dT=0.1,
-        record_every_dI=5E-6,
-        N_cycles=0,
-        I_range='KBIO_IRANGE_AUTO',
-        E_range='KBIO_ERANGE_2_5',
-        bandwidth='KBIO_BW_5'
-        ):
-        """Initialize the CA technique
-        NOTE: The voltage_step, vs_initial and duration_step must be a list or
-        tuple with the same length.
-        Args:
-            voltage_step (list): List (or tuple) of floats indicating the
-                voltage steps (A). See NOTE above.
-            vs_initial (list): List (or tuple) of booleans indicating whether
-                the current steps is vs. the initial one. See NOTE above.
-            duration_step (list): List (or tuple) of floats indicating the
-                duration of each step (s). See NOTE above.
-            record_every_dT (float): Record every dT (s)
-            record_every_dI (float): Record every dI (A)
-            N_cycles (int): The number of times the technique is REPEATED.
-                NOTE: This means that the default value is 0 which means that
-                the technique will be run once.
-            I_Range (str): A string describing the I range, see the
-                :data:`I_RANGES` module variable for possible values
-            E_range (str): A string describing the E range to use, see the
-                :data:`E_RANGES` module variable for possible values
-            Bandwidth (str): A string describing the bandwidth setting, see the
-                :data:`BANDWIDTHS` module variable for possible values
-        Raises:
-            ValueError: On bad lengths for the list arguments
-        """
-        if not len(voltage_step) == len(vs_initial) == len(duration_step):
-            message = 'The length of voltage_step, vs_initial and '\
-                      'duration_step must be the same'
-            raise ValueError(message)
-
-        args = (
-            TechniqueArgument('Voltage_step', '[single]', voltage_step,
-                              None, None),
-            TechniqueArgument('vs_initial', '[bool]', vs_initial,
-                              'in', [True, False]),
-            TechniqueArgument('Duration_step', '[single]', duration_step,
-                              '>=', 0.0),
-            TechniqueArgument('Step_number', 'integer', len(voltage_step),
-                              'in', range(99)),
-            TechniqueArgument('Record_every_dT', 'single', record_every_dT,
-                              '>=', 0.0),
-            TechniqueArgument('Record_every_dI', 'single', record_every_dI,
-                              '>=', 0.0),
-            TechniqueArgument('N_Cycles', 'integer', N_cycles, '>=', 0),
-            TechniqueArgument('I_Range', I_RANGES, I_range,
-                              'in', I_RANGES.values()),
-            TechniqueArgument('E_Range', E_RANGES, E_range,
-                              'in', E_RANGES.values()),
-            TechniqueArgument('Bandwidth', BANDWIDTHS, bandwidth, 'in',
-                              BANDWIDTHS.values()),
+    _define_parameter(
+        label=param.label,
+        value=param.type_(value),
+        index=index,
+        ecc_param=ecc_param
         )
-        super(CA, self).__init__(args, 'ca.ecc')
 
-#:Technique name to technique class translation dict. IMPORTANT. Add newly
-#:implemented techniques to this dictionary
-TechniqueIdentifiers = {
-    'KBIO_TECHID_OCV': OCV,
-    'KBIO_TECHID_CP': CP,
-    'KBIO_TECHID_CA': CA,
-    'KBIO_TECHID_CV': CV
-    }
+    return ecc_param
 
 
-def reverse_dict(dict_):
-    """Reverse the key/value status of a dict"""
-    return dict([[v, k] for k, v in dict_.items()])
+def _ecc_param_array(no_params: int) -> Array[EccParam]:
+    """Preallocated a ctypes.Array for EccParams.
+
+    Args:
+        no_params (int): Number of parameters.
+
+    Returns:
+        Array[EccParam]: Preallocated, empty array.
+    """
+
+    ecc_param_array_ = no_params * EccParam
+
+    return ecc_param_array_()
+
+
+def _consolidate_ecc_params(*ecc_param_tuple: list[EccParam]) -> EccParams:
+    """Consolidate EccParam into a single ctypes struct, ready for loading onto instrument.
+
+    Helper function for parse_technique_params().
+
+    Args:
+        *ecc_param_tuple (list[EccParam]): Individually prepared technique arguments.
+
+    Returns:
+        EccParams: Technique parameters ready to be passed
+            to potentiostats.load_technique().
+    """
+
+    ecc_param_list = list(ecc_param_tuple[0])
+    no_params = len(ecc_param_list)
+
+    params_array = _ecc_param_array(no_params=no_params)
+    for i, param in enumerate(ecc_param_list):
+        params_array[i] = param
+
+    return EccParams(no_params, params_array)
+
+
+def set_technique_params(*technique_params_tuple):
+    """Wrapper for initializing the technique params struct.
+
+    Args:
+        instrument (:class:`GeneralPotentiostat`): Instrument instance,
+            should be an instance of a subclass of
+            :class:`GeneralPotentiostat`
+    """
+    technique_params = dict(technique_params_tuple[0])
+
+    ecc_params = list()
+    for [param, value, index] in technique_params.values():
+        ecc_param = _make_ecc_param(
+            param=param, value=value, index=index
+            )
+        ecc_params.append(ecc_param)
+
+    c_technique_params = _consolidate_ecc_params(ecc_params)
+
+    return c_technique_params

@@ -1,10 +1,12 @@
 """Flask app connecting pithy container to biologic container"""
 
 import flask
-import json
 import logging
 import os
+from threading import Event, Thread
 import werkzeug
+
+from biologic import experiment, potentiostats
 
 log_filename = "logs/logs.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -18,31 +20,62 @@ app = flask.Flask(__name__)
 
 
 def configure_routes(app):
-    import wrapper
 
     @app.route('/')
     def hello_world():
-        """
+        """Establish initial connection.
+        
         Returns:
-            Str: Status message
+            str: Status message
         """
+
         return "Flask BioLogic server running"
 
     # Runs resonance
     @app.route('/run', methods=['POST'])
-    def get_resonance():
+    def run():
         """This is where the magic happens.
-        Receives params from pithy, passes them onto the potentiostat,
-        receives data from the potentiostat, and finally returns the data
-        Returns:
-            dict: waveform data
         """
 
-        params = flask.request.values.to_dict()
-        wrapper.run_ocv()
+        if 'experiment_' not in globals():
+            global experiment_
+            experiment_ = experiment.Experiment()
 
+        if experiment_.status == 'running':
+            return "Aborted: Experiment already running"
 
-        return json.dumps(params)
+        global pill, potentiostat
+
+        pill = Event()  # kills thread when called
+        potentiostat = potentiostats.HCP1005()
+
+        params = flask.request.json
+
+        Thread(target=experiment.run,
+               args=(potentiostat, params, pill, experiment_)).start()
+
+        return 'Technique started'
+
+    @app.route('/check_status')
+    def check_status():
+        if 'experiment_' not in globals():
+            return 'No experiment instance in scope'
+
+        return experiment_.status
+
+    @app.route('/stop')
+    def stop():
+        """A big, fat, virtual emergency stop button.
+        
+        Does two things:
+            (1) Stops the running technique.
+            (2) Stops data logging.
+        """
+
+        potentiostat.stop_channel()
+        pill.set()
+
+        return "Technique stopped"
 
 
     @app.errorhandler(werkzeug.exceptions.BadRequest)
