@@ -1,10 +1,10 @@
 import json
 import logging
 import os
-import threading
-from time import sleep
+from threading import Event
 
-from biologic import constants, database, potentiostats, techniques, utils
+from biologic import constants, database, techniques, utils
+from biologic.potentiostats import Potentiostat
 
 log_filename = "logs/logs.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -21,33 +21,29 @@ ip_address = settings['ip_address']
 class Experiment:
 
     def __init__(self):
-        self._status = 'running'
+        self._status = 'stopped'
 
     @property
     def status(self):
         return self._status
+    
+    def set_status(self, status: str):
+        self._status = status
 
     def check_status(self, state: int) -> None:
         self._status = constants.State(state).name
 
 
-def run(
-    potentiostat: potentiostats.Potentiostat, raw_params: dict,
-    pill: threading.Event
-    ):
+def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: Experiment):
     """Wrapper for running experiments.
-
 
     Args:
         potentiostat (potentiostats.Potentiostat): Instance of (a subclass of)
             a potentiostat.
         raw_params (dict): 
-        pill (threading.Event): Emergency safety button if an experiment must be
+        pill (threading.Event): Emergency stop button if an experiment must be
             externally terminated.
-    
     """
-
-    potentiostat.connect(ip_address=ip_address)
 
     parsed_params, tecc_ecc_path, path = utils.parse_raw_params(
         raw_params=raw_params
@@ -57,23 +53,24 @@ def run(
 
     c_tecc_params = techniques.set_technique_params(parsed_params)
 
+    potentiostat.connect(ip_address=ip_address)
     potentiostat.load_technique(
         technique_path=tecc_ecc_path, c_tecc_params=c_tecc_params
         )
     potentiostat.start_channel()
 
-    experiment = Experiment()
+    experiment_.set_status('running')
 
     try:
-        while experiment.status == 'running' and not pill.wait(1):
+        while experiment_.status == 'running' and not pill.wait(1):
             current_values = potentiostat.get_current_values()
             payload = utils.parse_payload(raw_data=current_values)
             # This writes to Drops, but I might have also to send data directly to
             # brix if brix cannot retrieve data fast enough. I'll cross that bridge when I get there
             # Also have to write some sort of asyncio mechanism for brix.
             db.write(payload=payload, table='biologic')
-            experiment.check_status(state=current_values['State'])
-            print(experiment.status)
+            experiment_.check_status(state=current_values['State'])
+
     except Exception as e:
         pill.set()
         logging.error(e)

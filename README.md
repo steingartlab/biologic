@@ -18,7 +18,7 @@ There are three main reasons for wanting to use a pseudo-CLI over a GUI:
 
 Sometimes the OEM doesn't provide an SDK/API, in which case we must resort to scrapers. BioLogic _does_ provide one. They even provide a suite of minimal examples in their [excellent documentation](https://www.biologic.net/support-software/ec-lab-oem-development-package/) to get one started.
 
-(2): **Syncing Instruments**. Oftentimes in our experiments we want to do something in tandem with cell cycling, e.g. [acoustics](https://github.com/steingartlab/acoustics_hardware), heat it up or apply variable stack pressure. Then it becomes very useful—almost necessary—to be able to programatically control these different systems in one place (e.g. proftron Dan's [pithy](https://github.com/dansteingart/pithy)) to have one event trigger another.
+(2): **Syncing Instruments**. Oftentimes in our experiments we want to do something in tandem with cell cycling, e.g. [acoustics](https://github.com/steingartlab/acoustics_hardware), control temperature or apply variable stack pressure. Then it becomes very useful—almost necessary—to be able to programatically control these different systems in one place (e.g. proftron Dan's [pithy](https://github.com/dansteingart/pithy)) to have one event trigger another.
 
 This is probably best illustrated with an example.
 
@@ -33,7 +33,7 @@ This library _can_ be run as a standalone application but is actually optimized 
 This only runs on Windows. I know, I know. It's just a design choice by BioLogic. Nothing is perfect. There is a way around that though, albeit a little hacky. To be able to run it as a standalone container it is run as a [Wine](https://www.winehq.org/) compatibility layer.
 
 
-It uses the `mqtt` protocol to receive commands and relay data (great when cache-ing is needed).
+It uses `https` protocol to receive commands (simple, robust, little overhead) and `mqtt` to submit relay data (great when cache-ing is needed).
 
 
 ## Example

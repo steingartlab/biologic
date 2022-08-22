@@ -198,7 +198,7 @@ class Potentiostat:
         Returns:
             dict: A dict of current values information
         """
-        import time
+
         c_current_values = structures.CurrentValues()
 
         status = self.driver.BL_GetCurrentValues(
@@ -209,13 +209,6 @@ class Potentiostat:
 
         # Convert the struct to a dict and translate a few values
         current_values = utils.structure_to_dict(c_current_values)
-        # current_values['State(translated)'] = constants.State(
-        #     current_values['State']
-        #     ).name
-        # current_values['IRange(translated)'] = constants.CurrentRange(
-        #     current_values['IRange']
-        #     ).name
-        print(current_values)
 
         return current_values
 
@@ -497,13 +490,13 @@ class Config(Potentiostat):
 
         utils.assert_status_ok(driver=self.driver, return_code=status)
 
-        print(
-            'communication speed between library and device:',
-            c_spd_rcvt.value
-            )
-        print(
-            'communication speed between library and channel:',
-            c_spd_kernel.value
-            )
+        # print(
+        #     'communication speed between library and device:',
+        #     c_spd_rcvt.value
+        #     )
+        # print(
+        #     'communication speed between library and channel:',
+        #     c_spd_kernel.value
+        #     )
 
         return c_spd_rcvt.value, c_spd_kernel.value

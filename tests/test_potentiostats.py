@@ -21,7 +21,6 @@ type_ = 'KBIO_DEV_HCP1005'
 ip_address = config['ip_address']
 channels = [1]
 
-
 DRIVERPATH = 'drivers\\'
 technique_path = DRIVERPATH + 'ocv.ecc'
 
@@ -64,13 +63,16 @@ def connection(pstat_instance: HCP1005):
 @pytest.fixture
 def technique() -> EccParams:
     parsed_params, _, _ = utils.parse_raw_params(raw_params=raw_params)
-    c_technique_params = techniques.set_technique_params(parsed_params)
+    c_technique_params = techniques.set_technique_params(
+        parsed_params
+        )
 
     return c_technique_params
 
 
 @pytest.fixture
 def loaded_technique(connection: HCP1005, technique: EccParams):
+    connection.stop_channel()
     connection.load_technique(
         technique_path=technique_path, c_tecc_params=technique
         )
@@ -100,12 +102,6 @@ def config():
 '''Unit tests'''
 
 
-def test_get_current_values_wo_starting(connection: HCP1005):
-    current_values = connection.get_current_values()
-
-    assert current_values['State'] == 0
-
-
 def test_successful_finding(finding_instance: InstrumentFinder):
     finding_instance.find()
 
@@ -115,6 +111,16 @@ def test_successful_finding(finding_instance: InstrumentFinder):
     ip_address = ipaddress.ip_address(finding_instance.ip_address)
 
     assert isinstance(ip_address, ipaddress.IPv4Address)
+
+
+def test_get_error_status(config: Config):
+    config.get_error_status()
+
+
+def test_get_message(config: Config):
+    message = config.get_message()
+
+    assert isinstance(message, str)
 
 
 def test_test_connection(config: Config):
@@ -149,19 +155,13 @@ def test_get_channel_info(config: Config):
     assert isinstance(channel_info, dict)
 
 
-def test_get_message(config: Config):
-    message = config.get_message()
-
-    assert isinstance(message, str)
-
-
-def test_get_error_status(config: Config):
-    config.get_error_status()
-
-
 ################################################
 
+def test_get_current_values_wo_starting(connection: HCP1005):
+    connection.stop_channel()
+    current_values = connection.get_current_values()
 
+    assert current_values['State'] == 0
 
 def test_connect(pstat_instance: HCP1005, finder: InstrumentFinder):
     pstat_instance.connect(ip_address=finder.ip_address)
@@ -183,12 +183,12 @@ def test_get_current_values(started_channel: HCP1005):
     assert isinstance(current_values, dict)
 
 
-# def test_get_data(started_channel: potentiostats.HCP1005):
-#     something = started_channel.get_data()
-
-
 def test_stop_channel(started_channel: HCP1005):
     started_channel.stop_channel()
+
+
+# def test_get_data(started_channel: potentiostats.HCP1005):
+#     something = started_channel.get_data()
 
 
 def test_disconnect(connection: HCP1005):

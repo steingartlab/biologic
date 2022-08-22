@@ -2,9 +2,9 @@
 
 import ctypes
 import json
-from typing import List, TypedDict
+from typing import TypedDict
 
-from biologic import constants, exceptions, structures
+from biologic import constants, exceptions
 
 with open('biologic\\config.json', 'r') as f:
     settings = json.load(f)
@@ -14,7 +14,7 @@ DRIVERPATH = settings['driverpath']
 
 class ParsedParams(TypedDict):
     key: str
-    params: structures.ECC_param
+    params: constants.ECC_param
 
 
 def _get_error_message(
@@ -47,6 +47,47 @@ def _get_error_message(
         raise exceptions.BLFindError(error_code=status, message=None)
 
     return message.value
+
+
+def _get_tecc_ecc_path(technique_name: str) -> str:
+    """Generates technique ecc-file path.
+
+    Helper function for parse_raw_params().
+
+    Args:
+        technique_name (str): Abbreviated technique name as presented
+            in documentation. Example: 'OCV'.
+
+    Returns:
+        str: (Relative) technique ecc-file path.
+    """
+    return f"{DRIVERPATH}{technique_name.lower()}.ecc"
+
+
+def _parse_exp_params(params: dict) -> ParsedParams:
+    """Parses incoming params from a dict to instrument-specific format.
+
+    Helper function for parse_raw_params().
+
+    Args:
+        params (dict): Incoming experiment params.
+
+    Returns:
+        Dict[str, structures.ECC_param]: _description_
+    """
+
+    parsed_params = dict()
+
+    for key, val in params.items():
+        label = val['ecc']
+        value = val['value']
+        parsed_params[key] = (
+            constants.ECC_param(label, type(value)),
+            value,
+            val['index']
+        )
+
+    return parsed_params
 
 
 def assert_device_type_ok(
@@ -189,6 +230,28 @@ def parse_channel_info(channel_info: dict) -> dict:
     return channel_info
 
 
+def parse_payload(
+    raw_data: dict,
+    desired_keys: list = ['Ewe', 'I', 'ElapsedTime']
+    ) -> dict:
+    parsed_data = dict()
+    """Parses data from instrument before it's dumped to db.
+
+    Args:
+        raw_data (dict): Raw data from instrument.
+        desired_keys (list, optional): Keys we want in payload.
+            Defaults to ['Ewe', 'I', 'ElapsedTime']
+
+    Returns:
+        dict: Payload.
+    """
+
+    for desired_key in desired_keys:
+        parsed_data[desired_key] = raw_data[desired_key]
+
+    return parsed_data
+
+
 def parse_potentiostat_search(bytes_string: bytes) -> str:
     """Extracts IP-address and instrument type from potentiostat search.
 
@@ -218,68 +281,6 @@ def parse_potentiostat_search(bytes_string: bytes) -> str:
     return ip, instrument_type
 
 
-def parse_payload(
-    raw_data: dict,
-    desired_keys: list = ['Ewe', 'I', 'ElapsedTime']
-    ) -> dict:
-    parsed_data = dict()
-    """Parses data from instrument before it's dumped to db.
-
-    Args:
-        raw_data (dict): Raw data from instrument.
-        desired_keys (list, optional): Keys we want in payload.
-            Defaults to ['Ewe', 'I', 'ElapsedTime']
-
-    Returns:
-        dict: Payload.
-    """
-
-    for desired_key in desired_keys:
-        parsed_data[desired_key] = raw_data[desired_key]
-
-    return parsed_data
-
-
-def _get_tecc_ecc_path(technique_name: str) -> str:
-    """Generates technique ecc-file path.
-
-    Helper function for parse_raw_params().
-
-    Args:
-        technique_name (str): Abbreviated technique name as presented
-            in documentation. Example: 'OCV'.
-
-    Returns:
-        str: (Relative) technique ecc-file path.
-    """
-    return f"{DRIVERPATH}{technique_name.lower()}.ecc"
-
-
-def _parse_exp_params(params: dict) -> ParsedParams:
-    """Parses incoming params from a dict to instrument-specific format.
-
-    Helper function for parse_raw_params().
-
-    Args:
-        params (dict): Incoming experiment params.
-
-    Returns:
-        Dict[str, structures.ECC_param]: _description_
-    """
-
-    parsed_params = dict()
-
-    for key, val in params.items():
-        label, type_ = val['ecc']
-        parsed_params[key] = (
-            structures.ECC_param(label, type_),
-            val['value'],
-            val['index']
-        )
-
-    return parsed_params
-
-
 def parse_raw_params(raw_params: dict):  # -> list(dict, str, str):
     """Wrapper for parsing incoming experiment parameters.
 
@@ -306,7 +307,7 @@ def parse_raw_params(raw_params: dict):  # -> list(dict, str, str):
 
 # def reverse_dict(dict_):
 #     """Reverse the key/value status of a dict.
-    
+
 #     Inherited from legacy code. TODO: Change to Enum.
 #     """
 #     return dict([[v, k] for k, v in dict_.items()])

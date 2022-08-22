@@ -3,17 +3,17 @@ raw_params = {
     'technique': 'OCV',
     'params': {
             'duration': {
-                    'ecc': ("Rest_time_T", float),
-                    'value': 10.0,
+                    'ecc': 'Rest_time_T',
+                    'value': 3.0,
                     'index': 0
         },
             'record_dt': {
-                    'ecc': ("Record_every_dT", float),
+                    'ecc': 'Record_every_dT',
                     'value': 1.0,
                     'index': 0
         },
             'E_range': {
-                    'ecc': ("E_Range", int),
+                    'ecc': 'E_Range',
                     'value': 5,
                     'index': 0
         }

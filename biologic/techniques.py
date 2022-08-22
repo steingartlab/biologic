@@ -1,3 +1,10 @@
+"""Parses experiment parameters from  a raw dict form to a instrument-specific
+format.
+
+Function set_technique_params() is the only one that should be called externally.
+All others can be considered helper functions.
+"""
+
 from ctypes import Array, c_float, c_bool, c_int32, create_string_buffer, byref, WinDLL
 import json
 from typing import Union

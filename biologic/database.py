@@ -1,3 +1,5 @@
+"""Employs the mqtt protocol to relay data stream to database."""
+
 import paho.mqtt.client as mqtt
 import json
 

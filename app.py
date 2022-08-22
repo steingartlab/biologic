@@ -3,7 +3,7 @@
 import flask
 import logging
 import os
-import threading
+from threading import Event, Thread
 import werkzeug
 
 from biologic import experiment, potentiostats
@@ -18,50 +18,64 @@ PORT = '5002'
 
 app = flask.Flask(__name__)
 
-pill = threading.Event()  # kills thread when called
-potentiostat = potentiostats.HCP1005()
-
 
 def configure_routes(app):
 
     @app.route('/')
     def hello_world():
-        """
+        """Establish initial connection.
+        
         Returns:
-            Str: Status message
+            str: Status message
         """
+
         return "Flask BioLogic server running"
 
     # Runs resonance
     @app.route('/run', methods=['POST'])
-    def get_resonance():
+    def run():
         """This is where the magic happens.
-        Receives params from pithy, passes them onto the potentiostat,
-        receives data from the potentiostat, and finally returns the data
-        Returns:
-            dict: waveform data
         """
 
-        if experiment.status == 'running':
+        if 'experiment_' not in globals():
+            global experiment_
+            experiment_ = experiment.Experiment()
+
+        if experiment_.status == 'running':
             return "Aborted: Experiment already running"
 
-        params = flask.request.values.to_dict()
-        
-        experiment.run(
-            potentiostat=potentiostat,
-            raw_params=params,
-            pill=pill
-        )
+        global pill, potentiostat
 
-        return "Technique started"
+        pill = Event()  # kills thread when called
+        potentiostat = potentiostats.HCP1005()
+
+        params = flask.request.json
+
+        Thread(target=experiment.run,
+               args=(potentiostat, params, pill, experiment_)).start()
+
+        return 'Technique started'
+
+    @app.route('/check_status')
+    def check_status():
+        if 'experiment_' not in globals():
+            return 'No experiment instance in scope'
+
+        return experiment_.status
 
     @app.route('/stop')
     def stop():
-        pill.set()
-        potentiostat.stop_channel()
-        potentiostat.disconnect()
+        """A big, fat, virtual emergency stop button.
+        
+        Does two things:
+            (1) Stops the running technique.
+            (2) Stops data logging.
+        """
 
-        return "Technique stoppped"
+        potentiostat.stop_channel()
+        pill.set()
+
+        return "Technique stopped"
 
 
     @app.errorhandler(werkzeug.exceptions.BadRequest)

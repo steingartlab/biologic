@@ -1,12 +1,8 @@
+"""Contains subclasses of ctypes.Structure for necessary type conversions between
+the python interface and the lower-level drivers.
+"""
+
 import ctypes
-from dataclasses import dataclass
-
-
-@dataclass
-class ECC_param:
-    """ECC param template"""
-    label: str
-    type_: type
 
 
 class ChannelInfos(ctypes.Structure):
