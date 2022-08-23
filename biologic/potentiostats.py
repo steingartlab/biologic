@@ -16,7 +16,7 @@ class InstrumentFinder:
     """Finds BioLogic instruments connected via ethernet.
     
     Attributes:
-        self.ip_address (str): Instrument IP-address, e.g. '192.168.0.1'.
+        self.usb_port (str): Instrument IP-address, e.g. '192.168.0.1'.
         self.instrument_type (str): Instrument type, e.g. 'SP-150'.
     """
 
@@ -27,17 +27,17 @@ class InstrumentFinder:
                 between 32 and 64-bit systems. Defaults to 'blfind64.dll'.
         """
         self.driver = ctypes.WinDLL(DRIVERPATH + driver)
-        self._ip_address: str = None
+        self._usb_port: str = None
         self._instrument_type: str = None
 
     @property
-    def ip_address(self) -> str:
-        """Returns parsed IP-address of connected instrument.
+    def usb_port(self) -> str:
+        """Returns parsed USB port of connected instrument.
 
         Returns:
-            str: Instrument IP-address, e.g. '192.168.0.1'.
+            str: Instrument USB port, e.g. 'USB0'.
         """
-        return self._ip_address
+        return str(self._usb_port)
 
     @property
     def instrument_type(self) -> str:
@@ -46,16 +46,17 @@ class InstrumentFinder:
         Returns:
             str: Instrument type, e.g. 'SP-150'.
         """
-        return self._instrument_type
+        return str(self._instrument_type)
 
     def save(self):
         with open('biologic\\config.json', 'r') as f:
             config = json.load(f)
 
-        config['ip_address'] = self.ip_address
+        config['usb_port'] = self.usb_port
+        config['instrument_type'] = self.instrument_type
 
-
-        json.dump(config, open('biologic\\config.json', 'w'))
+        with open('biologic\\config.json', 'w') as f:
+            json.dump(config, f, ensure_ascii=False)
 
     def find(self, bytes_: int = 255) -> None:
         """Searches for ethernet-connected BioLogic potentiostats.
@@ -69,14 +70,16 @@ class InstrumentFinder:
         size = ctypes.c_uint32(bytes_)
         nbr_dev = ctypes.c_uint32(bytes_)
 
-        status = self.driver.BL_FindEChemEthDev(
-            ctypes.byref(lst_dev), ctypes.byref(size),
+        status = self.driver.BL_FindEChemUsbDev(
+            ctypes.byref(lst_dev),
+            ctypes.byref(size),
             ctypes.byref(nbr_dev)
             )
 
         utils.assert_status_ok(driver=self.driver, return_code=status)
+        utils.assert_one_device(c_nbr_dev=nbr_dev)
 
-        self._ip_address, self._instrument_type = utils.parse_potentiostat_search(
+        self._usb_port, self._instrument_type = utils.parse_potentiostat_search(
             bytes_string=lst_dev
             )
 
@@ -104,7 +107,12 @@ class Potentiostat:
             be explicitly mentioned in every single method.
     """
 
-    def __init__(self, channel: int = 0, type_: str = None, driver: str = 'EClib64.dll'):
+    def __init__(
+        self,
+        channel: int = 0,
+        type_: str = None,
+        driver: str = 'EClib64.dll'
+        ):
         """Initialize the potentiostat driver.
 
         Args:
@@ -122,12 +130,11 @@ class Potentiostat:
 
         self.driver = ctypes.WinDLL(DRIVERPATH + driver)
 
-
-    def connect(self, ip_address: str, timeout: int = 5) -> None:
+    def connect(self, usb_port: str, timeout: int = 5) -> None:
         """Connects to instrument and returns device info.
         
         Args:
-            ip_address (str): IP-address of device, e.g. from
+            usb_port (str): IP-address of device, e.g. from
                 InstrumentFinder.find().
             timeout (int, optional): Wait for timeout number of seconds
                 before timing out. Defaults to 5.
@@ -136,7 +143,7 @@ class Potentiostat:
             ECLibCustomException: If class instance doesn't match device type.
         """
 
-        address = ctypes.create_string_buffer(ip_address.encode())
+        address = ctypes.create_string_buffer(usb_port.encode())
         self._id = ctypes.c_int32()
         self._device_info = structures.DeviceInfos()
 
@@ -389,7 +396,9 @@ class Config(Potentiostat):
             bool: Whether the channel is plugged or not.
         """
 
-        result = self.driver.BL_IsChannelPlugged(self._id, self.channel)
+        result = self.driver.BL_IsChannelPlugged(
+            self._id, self.channel
+            )
 
         return bool(result)
 

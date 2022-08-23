@@ -15,7 +15,7 @@ logging.basicConfig(filename=log_filename,
 with open('biologic\\config.json') as f:
     settings = json.load(f)
 
-ip_address = settings['ip_address']
+usb_port = settings['usb_port']
 
 
 class Experiment:
@@ -53,7 +53,7 @@ def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: 
 
     c_tecc_params = techniques.set_technique_params(parsed_params)
 
-    potentiostat.connect(ip_address=ip_address)
+    potentiostat.connect(usb_port=usb_port)
     potentiostat.load_technique(
         technique_path=tecc_ecc_path, c_tecc_params=c_tecc_params
         )

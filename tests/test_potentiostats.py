@@ -18,7 +18,7 @@ with open('biologic\\config.json') as f:
     config = json.load(f)
 
 type_ = 'KBIO_DEV_HCP1005'
-ip_address = config['ip_address']
+usb_port = 'USB0'
 channels = [1]
 
 DRIVERPATH = 'drivers\\'
@@ -52,7 +52,7 @@ def pstat_instance():
 
 @pytest.fixture
 def connection(pstat_instance: HCP1005):
-    pstat_instance.connect(ip_address=ip_address)
+    pstat_instance.connect(usb_port=usb_port)
 
     yield pstat_instance
 
@@ -93,7 +93,7 @@ def started_channel(loaded_technique: HCP1005):
 def config():
     config = Config(type=type_)
 
-    config.connect(ip_address=ip_address)
+    config.connect(usb_port=usb_port)
 
     return config
 
@@ -106,11 +106,11 @@ def test_successful_finding(finding_instance: InstrumentFinder):
     finding_instance.find()
 
     assert isinstance(finding_instance.instrument_type, str)
-    assert isinstance(finding_instance.ip_address, str)
+    assert isinstance(finding_instance.usb_port, str)
 
-    ip_address = ipaddress.ip_address(finding_instance.ip_address)
+    # usb_port = ipaddress.usb_port(finding_instance.usb_port)
 
-    assert isinstance(ip_address, ipaddress.IPv4Address)
+    # assert isinstance(usb_port, ipaddress.IPv4Address)
 
 
 def test_get_error_status(config: Config):
@@ -164,7 +164,9 @@ def test_get_current_values_wo_starting(connection: HCP1005):
     assert current_values['State'] == 0
 
 def test_connect(pstat_instance: HCP1005, finder: InstrumentFinder):
-    pstat_instance.connect(ip_address=finder.ip_address)
+
+    assert finder.usb_port == 'USB0'
+    pstat_instance.connect(usb_port=finder.usb_port)
 
 
 def test_load_technique(connection: HCP1005, technique: EccParams):

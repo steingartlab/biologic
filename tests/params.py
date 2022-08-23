@@ -42,4 +42,4 @@ dummy_raw_data = {
 
 # Matches the return string format when searching for connected potentiostats.
 # See section 5.1 in documentation for details.
-dummy_bytes_string = b'Ethernet$192.109.209.180$192.109.209.180$255.255.255.0$00.14.D8.01.08.6E$VMP3#0027$VMP3$0027$x$%'
+dummy_bytes_string = b'USB$0$$$$$HCP-1005$1002$$%'

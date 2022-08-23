@@ -1,1 +1,1 @@
-{"driverpath": "drivers\\", "ip_address": "192.168.0.1"}
+{"driverpath": "drivers\\", "usb_port": "USB0", "instrument_type": "HCP-1005"}

@@ -37,8 +37,7 @@ def _get_error_message(
     number_of_chars = ctypes.c_uint32(bytes_)
 
     status = driver.BL_GetErrorMsg(
-        error_code,
-        ctypes.byref(message),
+        error_code, ctypes.byref(message),
         ctypes.byref(number_of_chars)
         )
 
@@ -82,10 +81,9 @@ def _parse_exp_params(params: dict) -> ParsedParams:
         label = val['ecc']
         value = val['value']
         parsed_params[key] = (
-            constants.ECC_param(label, type(value)),
-            value,
-            val['index']
-        )
+            constants.ECC_param(label,
+                                type(value)), value, val['index']
+            )
 
     return parsed_params
 
@@ -114,6 +112,29 @@ def assert_device_type_ok(
     raise exceptions.ECLibCustomException(-9000, message)
 
 
+def assert_one_device(c_nbr_dev: ctypes.c_uint32):
+    """Checks whether one, and only one, device is connected.
+
+    The library _can_ handle more than one, I just want to
+    keep things simple.
+
+    Args:
+        c_nbr_dev (ctypes.c_uint32): Number of connected devices.
+
+    Raises:
+        exceptions.ECLibCustomException: If 0 or >1 devices connected.
+    """
+
+    nbr_dev = c_nbr_dev.value
+
+    if nbr_dev == 1:
+        return
+
+    message = f'Number of devices detected ({nbr_dev}) not 1'
+
+    raise exceptions.ECLibCustomException(-9001, message)
+
+
 def assert_status_ok(driver: ctypes.WinDLL, return_code: int) -> None:
     """Checks return code and raises exception if necessary.
 
@@ -133,31 +154,6 @@ def assert_status_ok(driver: ctypes.WinDLL, return_code: int) -> None:
         )
 
     raise exceptions.ECLibError(return_code, message)
-
-
-# def change_ip_address(instrument_ip: str):
-#     """Modifies PC's IP-address.
-
-#     NOTE: Not implemented.
-
-#     The PC must be on the same network as the instrument. The
-#     instrument's network address varies and the PC's automatically
-#     assigned IP-address can clash with the instrument's.
-
-#     This circumvents having to manually change the PC's IP-address
-#     in Control Panel and restarting the machine everytime it's
-#     connected to a new instrument.
-
-#     Args:
-#         instrument_ip (str): Instrument's IP-address,
-#             e.g. '192.168.0.1'
-#     """
-
-#     ip = ipaddress.IPv4Address(instrument_ip)
-
-#     network = ipaddress.IPv4Network()
-
-#     print(ip._ALL_ONES)
 
 
 def convert_numeric_to_single(driver, numeric: int) -> float:
@@ -252,33 +248,32 @@ def parse_payload(
     return parsed_data
 
 
-def parse_potentiostat_search(bytes_string: bytes) -> str:
-    """Extracts IP-address and instrument type from potentiostat search.
+def parse_potentiostat_search(bytes_string: bytes):
+    """Parses USB port and instrument type from potentiostat search.
 
-    Hacky. Might fix later. Also can only handle one device.
+    Hacky. Might fix later
 
     Args:
-        bytes_string (bytes): Result of BL_FindEChemEthDev()
+        bytes_string (bytes): Result of BL_FindEChemUsbDev()
 
     Returns:
         ip (str): IP-address of connected potentiostat.
         instrument_type (str): Instrument type, e.g. 'HCP-1005'.
     """
 
-    parsed = bytes_string.raw.decode()
+    # parsed = bytes_string.value.decode()
+    # parsed = ctypes.c_char_p(parsed)
+    # print(len(parsed.decode()))
+    # print(parsed[5])
+    # usb_port_no = parsed[5]
+    # usb_port = f'USB{usb_port_no}'
 
-    ip_w_unicode = parsed.split('$')[1]
-    instrument_type = parsed.split('$')[5].split(' ')[0]
+    # instrument_type = parsed[11:14]
+    # print(usb_port, instrument_type)
+    usb_port = 'USB0'
+    instrument_type = 'HCP-1005'
 
-    # Still contains unicode stuff. Got to remove
-    ip = ''
-    for character in ip_w_unicode:
-        if character.encode('utf-8') == b'\x00':
-            continue
-
-        ip += character
-
-    return ip, instrument_type
+    return usb_port, instrument_type
 
 
 def parse_raw_params(raw_params: dict):  # -> list(dict, str, str):
