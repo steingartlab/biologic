@@ -15,7 +15,11 @@ def client():
     configure_routes(app)
     client = app.test_client()
 
-    return client
+    yield client
+
+    client.get('/block')
+
+
 
 
 def test_base_route(client: FlaskClient):
@@ -51,27 +55,21 @@ def test_basic_run(client: FlaskClient):
 @pytest.fixture
 def running_client(client: FlaskClient):
     client.post('/run', json=raw_params)
-    
-    # Otherwise it doesn't have time to initiate a pstat 
-    # connection and change status to running
-    sleep(2)
 
-    return client
+    # Otherwise it doesn't have time to initiate a pstat
+    # connection and change status to running
+    sleep(1)
+
+    yield client
+
+    client.get('/block')
 
 
 def test_check_status_running(running_client: FlaskClient):
-
     response = running_client.get('/check_status')
 
     assert response.status_code == 200
     assert response.get_data() == b'running'
-
-
-def test_stop(running_client: FlaskClient):
-    response = running_client.get('/stop')
-
-    assert response.status_code == 200
-    assert response.get_data() == b'Technique stopped'
 
 
 def test_block_new_if_already_running(running_client: FlaskClient):
@@ -79,3 +77,10 @@ def test_block_new_if_already_running(running_client: FlaskClient):
 
     assert response.status_code == 200
     assert response.get_data() == b'Aborted: Experiment already running'
+
+
+def test_stop(running_client: FlaskClient):
+    response = running_client.get('/stop')
+
+    assert response.status_code == 200
+    assert response.get_data() == b'Technique stopped'

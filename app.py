@@ -51,8 +51,11 @@ def configure_routes(app):
 
         params = flask.request.json
 
-        Thread(target=experiment.run,
-               args=(potentiostat, params, pill, experiment_)).start()
+        global thread
+        thread = Thread(target=experiment.run,
+               args=(potentiostat, params, pill, experiment_))
+
+        thread.start()
 
         return 'Technique started'
 
@@ -81,6 +84,17 @@ def configure_routes(app):
     @app.errorhandler(werkzeug.exceptions.BadRequest)
     def handle_bad_request(e):
         return '', 404
+
+    @app.route('/block')
+    def block():
+        """Only for testing purposes."""
+        if 'thread' not in globals():
+            return "Thread nonexistent"
+        
+        thread.join()
+
+        return "Thread joined"
+
 
 
 configure_routes(app)
