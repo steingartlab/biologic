@@ -40,6 +40,5 @@ RUN umask 0 && xvfb-run sh -c "\
 RUN git clone https://github.com/steingartlab/biologic.git
 WORKDIR /biologic
 RUN umask 0 && xvfb-run sh -c "wine pip install -r requirements.txt"
-RUN echo "drops_prefix = 'steingart_lab/data'\nhost = 'data.ceec.echem.io'\nport = 1883\n" > biologic/config.py
 
 ENTRYPOINT umask 0 && xvfb-run sh -c "wine python app.py"
