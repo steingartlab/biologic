@@ -4,9 +4,11 @@ import flask
 import logging
 import os
 from threading import Event, Thread
+from time import sleep
 import werkzeug
 
-from biologic import experiment, potentiostats
+from biologic import experiment
+from biologic.potentiostats import HCP1005
 
 log_filename = "logs/logs.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -47,7 +49,7 @@ def configure_routes(app):
         global pill, potentiostat
 
         pill = Event()  # kills thread when called
-        potentiostat = potentiostats.HCP1005()
+        potentiostat = HCP1005()
 
         params = flask.request.json
 
@@ -56,6 +58,9 @@ def configure_routes(app):
                args=(potentiostat, params, pill, experiment_))
 
         thread.start()
+
+        while experiment_.status != 'running':
+            sleep(0.1)
 
         return 'Technique started'
 
