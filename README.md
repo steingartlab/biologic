@@ -6,13 +6,13 @@ Ever wanted to programatically control your potentiostat? You've come to the rig
 
 ## Acknowledgement
 
-This library is in part built upon previous work by vores danske venner hos DTU: [PyExpLabSys](https://github.com/CINF/PyExpLabSys). It also borrows from the OEM's official examples. Lastly, the Dockerfile is almost entirely from [pywine](https://github.com/webcomics/pywine). So, big thanks to [Tobix](https://github.com/TobiX)!
+This library is in part built upon previous work and advice by vores danske venner hos DTU: [PyExpLabSys](https://github.com/CINF/PyExpLabSys). It also borrows from the OEM's official examples. Lastly, the containerization couldn't have happened without [pywine](https://github.com/webcomics/pywine). So, big thanks to [Kenneth Nielsen](https://github.com/KennethNielsen) and [Tobix](https://github.com/TobiX)!
 
 ## Motivation
 
 Potentiostats from our comrades across the pond at BioLogic are second to none. Their GUI—[EC-Lab](https://www.biologic.net/support-software/ec-lab-software/)—is also great, but is at the end of the day bound by the limitations of a GUI.
 
-There are three main reasons for wanting to use programmatic control over a GUI:
+There are three main reasons for preferring programmatic control over a GUI:
 
 ### 1. Data Automation
 
@@ -78,7 +78,9 @@ response = requests.post(f'http://{ip}:{port}/run', timeout=3, json=params)
 
 ### Disclaimer
 
+This library was written with a narrow scope: Run CC/CV/EIS on HCP-1005 and SP-150 Biologics remotely and programmatically through [pithy](https://github.com/dansteingart/drops), dumping data to [drops](https://github.com/dansteingart/drops). It is of course written with modularity in mind but in the spirit of the MIT License we assume no reliability.
 
+We are, after all, battery scientists, not software engineers.
 
 ---
 
