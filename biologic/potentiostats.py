@@ -56,7 +56,7 @@ class InstrumentFinder:
         config['instrument_type'] = self.instrument_type
 
         with open('biologic\\config.json', 'w') as f:
-            json.dump(config, f, ensure_ascii=False)
+            json.dump(config, f)
 
     def find(self, bytes_: int = 255) -> None:
         """Searches for ethernet-connected BioLogic potentiostats.

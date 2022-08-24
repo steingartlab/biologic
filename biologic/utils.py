@@ -251,27 +251,30 @@ def parse_payload(
 def parse_potentiostat_search(bytes_string: bytes):
     """Parses USB port and instrument type from potentiostat search.
 
-    Hacky. Might fix later
+    Hacky. Might fix later.
 
     Args:
         bytes_string (bytes): Result of BL_FindEChemUsbDev()
 
     Returns:
-        ip (str): IP-address of connected potentiostat.
+        ip (str): USB-port of connected potentiostat, e.g. 'USB0'.
         instrument_type (str): Instrument type, e.g. 'HCP-1005'.
     """
 
-    # parsed = bytes_string.value.decode()
-    # parsed = ctypes.c_char_p(parsed)
-    # print(len(parsed.decode()))
-    # print(parsed[5])
-    # usb_port_no = parsed[5]
-    # usb_port = f'USB{usb_port_no}'
+    search_decoded = bytes_string.raw.decode('utf-8')
+    search_split = search_decoded.split('$')
+    search_parsed = list()
+    for item in search_split:
+        split = item.split('\x00')
+        merged = ''.join(split)
+        
+        if len(merged) ==0:
+            continue
 
-    # instrument_type = parsed[11:14]
-    # print(usb_port, instrument_type)
-    usb_port = 'USB0'
-    instrument_type = 'HCP-1005'
+        search_parsed.append(merged)
+
+    usb_port = search_parsed[0] + search_parsed[1]
+    instrument_type = search_parsed[2]
 
     return usb_port, instrument_type
 
