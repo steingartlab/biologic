@@ -18,7 +18,7 @@ There are three main reasons for preferring programmatic control over a GUI:
 
 We cycle a lot of cells. Like, a lot. As such, we have a lot of data. Time is a valuable commodity and we'd rather spend our time gaining insights from our experiments, rather than spending it manually uploading to our server ([drops](https://github.com/dansteingart/drops)).
 
-Sometimes the OEM doesn't provide an SDK/API, in which case we must resort to scrapers. BioLogic _does_ provide one. They even provide a suite of minimal examples in their [excellent documentation](https://www.biologic.net/support-software/ec-lab-oem-development-package/) to get one started.
+Sometimes the OEM doesn't provide an SDK/API, in which case we must resort to scrapers. BioLogic _does_ provide one. They even provide a suite of minimal examples in their [documentation](https://www.biologic.net/support-software/ec-lab-oem-development-package/) to get one started (requires login).
 
 ### 2. Syncing Instruments
 
@@ -51,23 +51,29 @@ ip = '0.0.0.0'
 port = '5001'
 
 params = {
-    'exp_id': 'test/test',
-    'technique': 'OCV',
-    'params': {
-            'duration': {
-                    'ecc': 'Rest_time_T',
-                    'value': 3.0,
-                    'index': 0
+    'exp_id': 'brix2/test/test',
+    'steps':{
+        'OCV1':{
+            'Rest_time_T': 3.0,
+            'Record_every_dT': 1.0,
         },
-            'record_dt': {
-                    'ecc': 'Record_every_dT',
-                    'value': 1.0,
-                    'index': 0
+        'CPLIMIT':{
+            'Current_step': -1.0,
+            'N_Cycles': 0,
+            'Step_number': 0,
+            'Duration_step': 3.0,
+            'Record_every_dT': 1.0,
+            'Test1_Config': 1,
+            'Test1_Value': 2.7,
+            'Exit_Cond': 1
         },
-            'E_range': {
-                    'ecc': 'E_Range',
-                    'value': 5,
-                    'index': 0
+        'OCV2':{
+            'Rest_time_T': 3.0,
+            'Record_every_dT': 1.0,
+        },
+        'LOOP':{
+            'loop_N_times': 2,
+            'protocol_number': 0
         }
     }
 }
@@ -84,4 +90,4 @@ We are, after all, battery scientists, not software engineers.
 
 ---
 
-Nitty gritty details [here](https://www.notion.so/ceecnyc/BioLogic-Programmatic-Control-b380082a3afd44e4b1ea3e22fede9d11#b0960bc5f0f344bb90784f707e637745) (internal).
+Nitty gritty details [here](https://www.notion.so/ceecnyc/BioLogic-Programmatic-Control-b380082a3afd44e4b1ea3e22fede9d11#b0960bc5f0f344bb90784f707e637745) (internal group page).
