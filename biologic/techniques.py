@@ -52,6 +52,11 @@ def set_technique_params(techniques: list[dict[str, Union[float, int, bool]]]) -
     for technique in techniques:
         ecc_param_list = list()
 
+        # For implicit sampling rate (1s). Previously every technique needed this
+        # passed explicitly.
+        if 'Record_every_dT' not in technique.keys() and 'loop_N_times' not in technique.keys():
+            technique['Record_every_dT'] = 1.0
+
         # If I understand it correctly, index>0 is only useful for techniques with
         # multiple steps. Will implement if need be
         for label, value in technique.items():
