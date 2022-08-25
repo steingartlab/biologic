@@ -1,24 +1,41 @@
-raw_params = {
+ocv_params = {
     'exp_id': 'brix2/test/test',
-    'technique': 'OCV',
-    'params': {
-            'duration': {
-                    'ecc': 'Rest_time_T',
-                    'value': 3.0,
-                    'index': 0
+    'steps': {
+        'OCV': {
+            'Rest_time_T': 3.0,
+            'Record_every_dT': 1.0,
+            }
+        }
+    }
+
+cp_params = {
+    'exp_id': 'brix2/test/test',
+    'steps':{
+        'OCV1':{
+            'Rest_time_T': 3.0,
+            'Record_every_dT': 1.0,
         },
-            'record_dt': {
-                    'ecc': 'Record_every_dT',
-                    'value': 1.0,
-                    'index': 0
+        'CPLIMIT':{
+            'Current_step': -1.0,
+            'N_Cycles': 0,
+            'Step_number': 0,
+            'Duration_step': 3.0,
+            'Record_every_dT': 1.0,
+            'Test1_Config': 1,
+            'Test1_Value': 2.7,
+            'Exit_Cond': 1
         },
-            'E_range': {
-                    'ecc': 'E_Range',
-                    'value': 5,
-                    'index': 0
+        'OCV2':{
+            'Rest_time_T': 3.0,
+            'Record_every_dT': 1.0,
+        },
+        'LOOP':{
+            'loop_N_times': 2,
+            'protocol_number': 0
         }
     }
 }
+
 
 dummy_raw_data = {
     'State': 0,
@@ -39,6 +56,7 @@ dummy_raw_data = {
     'Rcomp': 0.0,
     'Saturation': 0
     }
+
 
 # Matches the return string format when searching for connected potentiostats.
 # See section 5.1 in documentation for details.

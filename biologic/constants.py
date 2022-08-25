@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from enum import Enum, auto
-import enum
 
 
 class AutoEnum(Enum):
@@ -12,13 +11,7 @@ class AutoEnum(Enum):
         if len(last_values) > 0:
             return last_values[-1] + 1
         return 0
-
-@dataclass
-class ECC_param:
-    """ECC param template"""
-    label: str
-    type_: type
-
+        
 
 class Device(Enum):
     """Only including implemented devices."""

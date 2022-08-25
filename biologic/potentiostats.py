@@ -161,10 +161,8 @@ class Potentiostat:
 
     def load_technique(
         self,
-        technique_path: str,
-        c_tecc_params: structures.EccParams,
-        first: bool = True,
-        last: bool = True
+        technique_paths: list[str],
+        c_tecc_params: list[structures.EccParams]
         ) -> None:
         """Load a technique onto the specified channel.
 
@@ -174,23 +172,25 @@ class Potentiostat:
                 and module techniques.py for details.
             technique_filename (str): Technique filename w relative path,
                 e.g. 'drivers\\ocv.ecc'.
-            first (bool, optional): Whether this technique is the first
-                technique. Defaults to True.
-            last (bool, optional): Thether this technique is the last
-                technique. Defaults to True.
         """
 
-        status = self.driver.BL_LoadTechnique(
-            self._id,
-            self.channel,
-            technique_path.encode(),
-            c_tecc_params,
-            first,
-            last,
-            False,
+        no_techniques = len(technique_paths)
+        for index, technique_path in enumerate(technique_paths):
+
+            first = True if index==0 else False
+            last = True if index==no_techniques-1 else False
+
+            status = self.driver.BL_LoadTechnique(
+                self._id,
+                self.channel,
+                technique_path.encode(),
+                c_tecc_params[index],
+                first,
+                last,
+                False,
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+            utils.assert_status_ok(driver=self.driver, return_code=status)
 
     def start_channel(self) -> None:
         """Starts technique loaded on channel."""

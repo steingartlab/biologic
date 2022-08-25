@@ -1,16 +1,17 @@
 import ctypes
 import pytest
 
-from biologic import techniques, utils
-from biologic.structures import EccParam
-from tests.params import raw_params
+from biologic import techniques
+from biologic.structures import EccParam, EccParams
+from biologic.utils import parse_raw_params
+from tests.params import cp_params
 
 dummy_int = 2
 dummy_bool = True
 dummy_single = 10.0
 
-dummy_label = 'duration'
-dummy_value = 10.0
+dummy_label = 'record_dt'
+dummy_value = 1.0
 dummy_index = 0
 param = EccParam()
 
@@ -46,18 +47,9 @@ def test_define_parameter():
     assert param.ParamVal != 0
 
 
-@pytest.fixture
-def params_():
-    params_ = utils._parse_exp_params(params=raw_params['params'])
-
-    return params_
-
-
-def test_make_ecc_param(params_: utils.ParsedParams):
+def test_make_ecc_param():
     ecc_param = techniques._make_ecc_param(
-        param=params_['duration'][0],
-        value=dummy_value,
-        index=dummy_index
+        label=dummy_label, value=dummy_value, index=dummy_index
         )
 
     assert isinstance(ecc_param, EccParam)
@@ -67,21 +59,29 @@ def test_make_ecc_param(params_: utils.ParsedParams):
 
 def test_ecc_param_array():
     ecc_param_array = techniques._ecc_param_array(
-        no_params=len(raw_params)
+        no_params=len(cp_params)
         )
 
-    assert len(ecc_param_array) == len(raw_params)
+    assert len(ecc_param_array) == len(cp_params)
     assert isinstance(ecc_param_array[0], EccParam)
 
 
 @pytest.fixture
-def ecc_param_list(params_: utils.ParsedParams):
+def technique_params_raw() -> list[dict]:
+    technique_params_raw, _, _ = parse_raw_params(
+        raw_params=cp_params
+        )
+    return technique_params_raw
 
+
+@pytest.fixture
+def ecc_param_list(technique_params_raw: list[dict]):
     ecc_param_list = list()
 
-    for [param, value, index] in params_.values():
+    technique_params = technique_params_raw[0]
+    for label, value in technique_params.items():
         ecc_param = techniques._make_ecc_param(
-            param=param, value=value, index=index
+            label=label, value=value, index=0
             )
         ecc_param_list.append(ecc_param)
 
@@ -89,9 +89,16 @@ def ecc_param_list(params_: utils.ParsedParams):
 
 
 def test_consolidate_ecc_params(ecc_param_list):
-    techniques._consolidate_ecc_params(ecc_param_list)
+    c_tecc_params = techniques._consolidate_ecc_params(ecc_param_list)
+
+    assert isinstance(c_tecc_params, EccParams)
 
 
 # Integration
-def test_parse_technique_params(params_):
-    techniques.set_technique_params(params_)
+def test_parse_technique_params(technique_params_raw):
+    c_tecc_params = techniques.set_technique_params(
+        technique_params_raw
+        )
+
+    assert isinstance(c_tecc_params, list)
+    assert isinstance(c_tecc_params[0], EccParams)

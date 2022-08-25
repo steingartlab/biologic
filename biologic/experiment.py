@@ -3,8 +3,11 @@ import logging
 import os
 from threading import Event
 
-from biologic import constants, database, techniques, utils
+from biologic.constants import State
+from biologic.database import Database
 from biologic.potentiostats import Potentiostat
+from biologic.techniques import set_technique_params
+from biologic.utils import parse_raw_params, parse_payload
 
 log_filename = "logs/logs.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -31,7 +34,7 @@ class Experiment:
         self._status = status
 
     def check_status(self, state: int) -> None:
-        self._status = constants.State(state).name
+        self._status = State(state).name
 
 
 def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: Experiment):
@@ -45,17 +48,14 @@ def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: 
             externally terminated.
     """
 
-    parsed_params, tecc_ecc_path, path = utils.parse_raw_params(
+    parsed_params, technique_paths, db_path = parse_raw_params(
         raw_params=raw_params
         )
-
-    db = database.Database(path=path)
-
-    c_tecc_params = techniques.set_technique_params(parsed_params)
-
+    db = Database(path=db_path)
+    c_tecc_params = set_technique_params(parsed_params)
     potentiostat.connect(usb_port=usb_port)
     potentiostat.load_technique(
-        technique_path=tecc_ecc_path, c_tecc_params=c_tecc_params
+        technique_paths=technique_paths, c_tecc_params=c_tecc_params
         )
     potentiostat.start_channel()
 
@@ -64,10 +64,7 @@ def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: 
     try:
         while experiment_.status == 'running' and not pill.wait(1):
             current_values = potentiostat.get_current_values()
-            payload = utils.parse_payload(raw_data=current_values)
-            # This writes to Drops, but I might have also to send data directly to
-            # brix if brix cannot retrieve data fast enough. I'll cross that bridge when I get there
-            # Also have to write some sort of asyncio mechanism for brix.
+            payload = parse_payload(raw_data=current_values)
             db.write(payload=payload, table='biologic')
             experiment_.check_status(state=current_values['State'])
 

@@ -2,14 +2,14 @@
 HCP-1005 potentiostat in order for this testing module to pass. 
 """
 
-import ipaddress
 import json
 import pytest
 
-from biologic import techniques, utils
+from biologic import utils
 from biologic.potentiostats import InstrumentFinder, HCP1005, Config
 from biologic.structures import EccParams
-from tests.params import raw_params
+from biologic.techniques import set_technique_params
+from tests.params import cp_params
 
 ############################################################################
 '''Boilerplate'''
@@ -22,7 +22,6 @@ usb_port = 'USB0'
 channels = [1]
 
 DRIVERPATH = 'drivers\\'
-technique_path = DRIVERPATH + 'ocv.ecc'
 
 ############################################################################
 '''Fixtures'''
@@ -61,20 +60,26 @@ def connection(pstat_instance: HCP1005):
 
 
 @pytest.fixture
-def technique() -> EccParams:
-    parsed_params, _, _ = utils.parse_raw_params(raw_params=raw_params)
-    c_technique_params = techniques.set_technique_params(
-        parsed_params
-        )
+def technique() -> list[EccParams]:
+    parsed_params, _, _ = utils.parse_raw_params(raw_params=cp_params)
+    c_technique_params = set_technique_params(parsed_params)
 
     return c_technique_params
 
 
 @pytest.fixture
-def loaded_technique(connection: HCP1005, technique: EccParams):
+def technique_paths() -> list[str]:
+    _, technique_paths, _ = utils.parse_raw_params(raw_params=cp_params)
+
+    return technique_paths
+
+
+
+@pytest.fixture
+def loaded_technique(connection: HCP1005, technique: list[EccParams], technique_paths: list[str]):
     connection.stop_channel()
     connection.load_technique(
-        technique_path=technique_path, c_tecc_params=technique
+        technique_paths=technique_paths, c_tecc_params=technique
         )
 
     return connection
@@ -157,11 +162,13 @@ def test_get_channel_info(config: Config):
 
 ################################################
 
+
 def test_get_current_values_wo_starting(connection: HCP1005):
     connection.stop_channel()
     current_values = connection.get_current_values()
 
     assert current_values['State'] == 0
+
 
 def test_connect(pstat_instance: HCP1005, finder: InstrumentFinder):
 
@@ -169,9 +176,11 @@ def test_connect(pstat_instance: HCP1005, finder: InstrumentFinder):
     pstat_instance.connect(usb_port=finder.usb_port)
 
 
-def test_load_technique(connection: HCP1005, technique: EccParams):
+def test_load_technique(
+    connection: HCP1005, technique: list[EccParams], technique_paths: list[str]
+    ):
     connection.load_technique(
-        technique_path=technique_path, c_tecc_params=technique
+        technique_paths=technique_paths, c_tecc_params=technique
         )
 
 

@@ -1,33 +1,36 @@
 import pytest
-from threading import Event
+from threading import Event, Thread
+from time import sleep
 
-from biologic import experiment, potentiostats
-from tests.params import raw_params
+from biologic.experiment import Experiment, run
+from biologic.potentiostats import HCP1005
+from tests.params import cp_params
 
 
 @pytest.fixture
 def experiment_():
-    experiment_ = experiment.Experiment()
+    experiment_ = Experiment()
 
     return experiment_
 
 
-def test_initial_status(experiment_: experiment.Experiment):
+def test_initial_status(experiment_: Experiment):
     assert experiment_.status == 'stopped'
 
 
-def test_check_status_stopped(experiment_: experiment.Experiment):
+def test_check_status_stopped(experiment_: Experiment):
     experiment_.check_status(state=0)
 
     assert experiment_.status == 'stopped'
 
 
-def test_check_status_paused(experiment_: experiment.Experiment):
+def test_check_status_paused(experiment_: Experiment):
     experiment_.check_status(state=2)
 
     assert experiment_.status == 'paused'
 
-def test_check_status_running(experiment_: experiment.Experiment):
+
+def test_check_status_running(experiment_: Experiment):
     experiment_.check_status(state=1)
 
     assert experiment_.status == 'running'
@@ -35,7 +38,7 @@ def test_check_status_running(experiment_: experiment.Experiment):
 
 @pytest.fixture
 def potentiostat_():
-    potentiostat_ = potentiostats.HCP1005()
+    potentiostat_ = HCP1005()
 
     return potentiostat_
 
@@ -47,11 +50,20 @@ def pill():
     return pill
 
 
-def test_run(potentiostat_: potentiostats.Potentiostat, pill: Event, experiment_):
+def test_run(potentiostat_: HCP1005, pill: Event, experiment_: Experiment):
     """Very minimalistic. More nuanced tests in test_app.py"""
 
-    experiment.run(
-        potentiostat=potentiostat_, raw_params=raw_params, pill=pill, experiment_=experiment_
+    run(
+        potentiostat=potentiostat_,
+        raw_params=cp_params,
+        pill=pill,
+        experiment_=experiment_
     )
 
+    pill.set()
+
+def test_setting_pill(potentiostat_: HCP1005, pill: Event, experiment_: Experiment):
+    thread = Thread(target=run, args=(potentiostat_, cp_params, pill, experiment_))
+    thread.start()
+    sleep(1)
     pill.set()

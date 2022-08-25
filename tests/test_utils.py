@@ -2,8 +2,8 @@ import ctypes
 import json
 import pytest
 
-from biologic import constants, exceptions, utils
-from tests.params import raw_params, dummy_raw_data, dummy_bytes_string
+from biologic import exceptions, utils
+from tests.params import cp_params, dummy_raw_data, dummy_bytes_string
 
 with open('biologic/config.json') as f:
     config = json.load(f)
@@ -104,35 +104,29 @@ def test_parse_payload():
     assert len(payload) == 3
 
 
-def test_parse_exp_params():
-    parsed_params = utils._parse_exp_params(
-        params=raw_params['params']
-        )
+@pytest.fixture
+def technique_name():
+    technique_name = list(cp_params['steps'].keys())[0]
 
-    assert isinstance(parsed_params, dict)
-    assert isinstance(
-        parsed_params['duration'][0], constants.ECC_param
-        )
+    return technique_name
 
 
-def test_get_tecc_ecc_path():
+def test_get_tecc_ecc_path(technique_name: str):
     tecc_ecc_path = utils._get_tecc_ecc_path(
-        technique_name=raw_params['technique']
+        technique_name=technique_name
         )
 
     assert tecc_ecc_path == dummy_tecc_ecc_path
 
 
 def test_parse_raw_params():
-    parsed_params, tecc_ecc_path, exp_id = utils.parse_raw_params(
-        raw_params=raw_params
+    parsed_steps, tecc_ecc_path, exp_id = utils.parse_raw_params(
+        raw_params=cp_params
         )
 
-    assert isinstance(parsed_params, dict)
-    assert isinstance(
-        parsed_params['duration'][0], constants.ECC_param
-        )
-    assert tecc_ecc_path == dummy_tecc_ecc_path
+    assert isinstance(parsed_steps, list)
+    assert parsed_steps[0]['Record_every_dT'] == 1.0
+    assert tecc_ecc_path[0] == dummy_tecc_ecc_path
     assert exp_id == dummy_exp_id
 
 

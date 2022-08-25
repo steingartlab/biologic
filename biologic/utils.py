@@ -2,7 +2,7 @@
 
 import ctypes
 import json
-from typing import TypedDict
+import re
 
 from biologic import constants, exceptions
 
@@ -11,10 +11,6 @@ with open('biologic\\config.json', 'r') as f:
 
 DRIVERPATH = settings['driverpath']
 
-
-class ParsedParams(TypedDict):
-    key: str
-    params: constants.ECC_param
 
 
 def _get_error_message(
@@ -48,10 +44,12 @@ def _get_error_message(
     return message.value
 
 
-def _get_tecc_ecc_path(technique_name: str) -> str:
+def _get_tecc_ecc_path(technique_name: str, to_remove: str = '[0-9]') -> str:
     """Generates technique ecc-file path.
 
     Helper function for parse_raw_params().
+
+    Hacky. Should probably refactor how technique parameters are passed.
 
     Args:
         technique_name (str): Abbreviated technique name as presented
@@ -60,32 +58,11 @@ def _get_tecc_ecc_path(technique_name: str) -> str:
     Returns:
         str: (Relative) technique ecc-file path.
     """
-    return f"{DRIVERPATH}{technique_name.lower()}.ecc"
 
-
-def _parse_exp_params(params: dict) -> ParsedParams:
-    """Parses incoming params from a dict to instrument-specific format.
-
-    Helper function for parse_raw_params().
-
-    Args:
-        params (dict): Incoming experiment params.
-
-    Returns:
-        Dict[str, structures.ECC_param]: _description_
-    """
-
-    parsed_params = dict()
-
-    for key, val in params.items():
-        label = val['ecc']
-        value = val['value']
-        parsed_params[key] = (
-            constants.ECC_param(label,
-                                type(value)), value, val['index']
-            )
-
-    return parsed_params
+    technique_name_wo_index = re.sub(to_remove, '', technique_name)
+    technique_name_wo_index_lowercase = technique_name_wo_index.lower()
+    
+    return f"{DRIVERPATH}{technique_name_wo_index_lowercase}.ecc"
 
 
 def assert_device_type_ok(
@@ -288,27 +265,24 @@ def parse_raw_params(raw_params: dict):  # -> list(dict, str, str):
 
     Returns:
         parsed_params (Dict[str, structures.ECC_param]): Parsed experiment parameters.
-        tecc_ecc_path (str): Technique ecc-file path.
-        exp_id (str): Experiment ID.
+        tecc_ecc_path (list): List of technique ecc-file paths,
+            in sequential order.
+        exp_id (str): Experiment ID (corresponding to Drops schema).
     """
 
-    parsed_params = _parse_exp_params(params=raw_params['params'])
+    exp_id: str = raw_params['exp_id']
+    steps: dict = raw_params['steps']
 
-    tecc_ecc_path = _get_tecc_ecc_path(
-        technique_name=raw_params['technique']
-        )
+    techniques_ecc_paths = list()
+    parsed_steps = list()
 
-    exp_id = raw_params['exp_id']
+    for technique, params in steps.items():
+        tecc_ecc_path = _get_tecc_ecc_path(technique_name=technique)
+        techniques_ecc_paths.append(tecc_ecc_path)
 
-    return parsed_params, tecc_ecc_path, exp_id
+        parsed_steps.append(params)
 
-
-# def reverse_dict(dict_):
-#     """Reverse the key/value status of a dict.
-
-#     Inherited from legacy code. TODO: Change to Enum.
-#     """
-#     return dict([[v, k] for k, v in dict_.items()])
+    return parsed_steps, techniques_ecc_paths, exp_id
 
 
 def structure_to_dict(structure: ctypes.Structure) -> dict:
