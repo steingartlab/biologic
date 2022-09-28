@@ -8,20 +8,16 @@ default_error_msg = 'The error message is unknown, because it is the '\
 class ECLibException(Exception):
     """Base exception for all ECLib exceptions"""
 
-    def __init__(self, error_code: int, message: bytes = None):
+    def __init__(self, error_code: int, message: str = None):
         super(ECLibException, self).__init__(message)
 
-        self.error_code = error_code
-
-        if message is None:
-            self.message = default_error_msg
-        else:
-            self.message = message
+        self.error_code: int = error_code
+        self.message: str = default_error_msg if message is None else message
 
     def __str__(self):
         """__str__ representation of the ECLibException"""
 
-        return f'{self.__class__.__name__}\nerror code: {self.error_code}\nmessage: "{self.message.decode()}"'
+        return f'{self.__class__.__name__}\nerror code: {self.error_code}\nmessage: "{self.message}"'
 
     def __repr__(self):
         """__repr__ representation of the ECLibException"""
@@ -32,7 +28,7 @@ class ECLibException(Exception):
 class ECLibError(ECLibException):
     """Exception for ECLib errors"""
 
-    def __init__(self, error_code, message):
+    def __init__(self, error_code: int, message: str):
         super(ECLibError, self).__init__(
             error_code=error_code, message=message
             )
@@ -40,7 +36,7 @@ class ECLibError(ECLibException):
 
 class BLFindError(ECLibException):
 
-    def __init__(self, error_code, message):
+    def __init__(self, error_code: int, message: str):
         super(BLFindError, self).__init__(
             error_code=error_code, message=message
             )
@@ -49,7 +45,7 @@ class BLFindError(ECLibException):
 class ECLibCustomException(ECLibException):
     """Exceptions that does not originate from the lib"""
 
-    def __init__(self, error_code, message: str = None):
+    def __init__(self, error_code: int, message: str = None):
 
         super(ECLibCustomException, self).__init__(
             error_code=error_code, message=message

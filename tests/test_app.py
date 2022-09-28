@@ -17,6 +17,9 @@ def client():
 
     yield client
 
+    # Precludes next test from proceeding before
+    # previous is finished. Seems clunky he in the tests
+    # but is logical bc we need threading.
     client.get('/block')
 
 

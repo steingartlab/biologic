@@ -2,6 +2,7 @@
 HCP-1005 potentiostat in order for this testing module to pass. 
 """
 
+import ipaddress
 import json
 import pytest
 
@@ -18,7 +19,7 @@ with open('biologic\\config.json') as f:
     config = json.load(f)
 
 type_ = 'KBIO_DEV_HCP1005'
-usb_port = 'USB0'
+usb_port = '192.168.0.1'
 channels = [1]
 
 DRIVERPATH = 'drivers\\'
@@ -113,9 +114,15 @@ def test_successful_finding(finding_instance: InstrumentFinder):
     assert isinstance(finding_instance.instrument_type, str)
     assert isinstance(finding_instance.usb_port, str)
 
-    # usb_port = ipaddress.usb_port(finding_instance.usb_port)
+    usb_port = ipaddress.ip_address(finding_instance.usb_port)
 
-    # assert isinstance(usb_port, ipaddress.IPv4Address)
+    assert isinstance(usb_port, ipaddress.IPv4Address)
+
+
+def test_change_ip(finding_instance: InstrumentFinder):
+    finding_instance.change_ip(
+        incumbent_ip=usb_port, new_ip='192.109.209.22'
+        )
 
 
 def test_get_error_status(config: Config):
@@ -172,7 +179,7 @@ def test_get_current_values_wo_starting(connection: HCP1005):
 
 def test_connect(pstat_instance: HCP1005, finder: InstrumentFinder):
 
-    assert finder.usb_port == 'USB0'
+    assert finder.usb_port == '192.168.0.1'
     pstat_instance.connect(usb_port=finder.usb_port)
 
 

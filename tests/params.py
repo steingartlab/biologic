@@ -10,31 +10,41 @@ ocv_params = {
 
 cp_params = {
     'exp_id': 'brix2/test/test',
-    'steps':{
-        'OCV1':{
-            'Rest_time_T': 3.0,
-            'Record_every_dT': 1.0,
-        },
-        'CPLIMIT':{
-            'Current_step': -1.0,
-            'N_Cycles': 0,
-            'Step_number': 0,
-            'Duration_step': 3.0,
-            'Record_every_dT': 1.0,
-            'Test1_Config': 1,
-            'Test1_Value': 2.7,
-            'Exit_Cond': 1
-        },
-        'OCV2':{
-            'Rest_time_T': 3.0,
-            'Record_every_dT': 1.0,
-        },
-        'LOOP':{
-            'loop_N_times': 2,
-            'protocol_number': 0
-        }
+    'steps':
+        {
+            'OCV1': {
+                'Rest_time_T': 3.0,
+                },
+            'CPLIMIT1':
+                {
+                    'Current_step': -1.0,
+                    'N_Cycles': 0,
+                    'Step_number': 0,
+                    'Duration_step': 3.0,
+                    'Voltage_limit': 2.7,
+                    'Exit_Cond': 1
+                    },
+            'OCV2': {
+                'Rest_time_T': 3.0,
+                },
+            'CPLIMIT2':
+                {
+                    'Current_step': 1.0,
+                    'N_Cycles': 0,
+                    'Step_number': 0,
+                    'Duration_step': 3.0,
+                    'Voltage_limit': 3.2,
+                    'Exit_Cond': 1
+                    },
+            'LOOP':
+                {
+                    # loop_N_times=1 means repeat loop once, i.e. do two loops total.
+                    'loop_N_times': 1,
+                    # Equivalent to go to technique no 0
+                    'protocol_number': 0
+                    }
+            }
     }
-}
 
 
 dummy_raw_data = {

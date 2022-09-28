@@ -1,9 +1,9 @@
 """Employs the mqtt protocol to relay data stream to database."""
 
-import paho.mqtt.client as mqtt
 import json
+from paho.mqtt.client import Client, MQTTMessageInfo
 
-from biologic import config
+from biologic.config import drops_prefix, host, port
 
 class Database:
     """Establishes a one-way connection to Drops to push data through
@@ -28,24 +28,22 @@ class Database:
             trailing slashes.
         """
 
-        self.client = mqtt.Client()
-        self.client.connect(
-            host=config.host,
-            port=config.port,
-            keepalive=3600
-        )
+        self.client = Client()
+        self.client.connect(host=host, port=port, keepalive=3600)
         self.client.loop_start()
 
-        self.url = f'{config.drops_prefix}/{path}/'
+        self.url = f'{drops_prefix}/{path}/'
 
-    def write(self, payload: dict, table: str = 'table') -> mqtt.MQTTMessageInfo:
-        """Writes data out to Drops.
+    def write(self, payload: dict, table: str = 'table') -> MQTTMessageInfo:
+        """Writes data out to data.ceec.echem.io, a.k.a. drops.
+
         Args:
             payload (dict): The output data.
             table (str, optional): Table name in database.
                 Defaults to 'table'.
+
         Returns:
-            mqtt.MQTTMessageInfo: Contains property *is_published*
+            MQTTMessageInfo: Contains property *is_published*
                 for checking if writeout was successful.
         """
 

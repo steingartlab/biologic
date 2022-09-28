@@ -12,8 +12,39 @@ with open('biologic\\config.json', 'r') as f:
 DRIVERPATH = settings['driverpath']
 
 
-
 def _get_error_message(
+    driver: ctypes.WinDLL, error_code: int, bytes_: int = 255
+    ) -> str:
+    """Returns error message's corresponding error_code.
+
+    Helper function for assert_status_ok().
+    
+    Args:
+        driver (ctypes.WinDLL): Driver for calling ECLib function.
+        error_code (int): The error number to translate.
+        bytes_ (int): Number of bytes to allocate to message.
+    
+    Returns:
+        str: Error message's corresponding error_code.
+    """
+
+    message = ctypes.create_string_buffer(bytes_)
+    number_of_chars = ctypes.c_uint32(bytes_)
+
+    status = driver.BL_GetErrorMsg(
+        error_code,
+        ctypes.byref(message),
+        ctypes.byref(number_of_chars)
+    )
+
+    # # Can't use assert__status_ok() here since it implicitly runs this method.
+    if status != 0:
+        raise exceptions.ECLibError(error_code=status, message=message)
+
+    return message.raw.decode()
+
+
+def _get_error_finder_message(
     driver: ctypes.WinDLL, error_code: int, bytes_: int = 255
     ) -> str:
     """Returns error message's corresponding error_code.
@@ -39,12 +70,14 @@ def _get_error_message(
 
     # # Can't use assert__status_ok() here since it implicitly runs this method.
     if status != 0:
-        raise exceptions.BLFindError(error_code=status, message=None)
+        raise exceptions.BLFindError(error_code=status, message=message)
 
-    return message.value
+    return message.raw.decode()
 
 
-def _get_tecc_ecc_path(technique_name: str, to_remove: str = '[0-9]') -> str:
+def _get_tecc_ecc_path(
+    technique_name: str, to_remove: str = '[0-9]'
+    ) -> str:
     """Generates technique ecc-file path.
 
     Helper function for parse_raw_params().
@@ -60,8 +93,9 @@ def _get_tecc_ecc_path(technique_name: str, to_remove: str = '[0-9]') -> str:
     """
 
     technique_name_wo_index = re.sub(to_remove, '', technique_name)
-    technique_name_wo_index_lowercase = technique_name_wo_index.lower()
-    
+    technique_name_wo_index_lowercase = technique_name_wo_index.lower(
+    )
+
     return f"{DRIVERPATH}{technique_name_wo_index_lowercase}.ecc"
 
 
@@ -110,6 +144,29 @@ def assert_one_device(c_nbr_dev: ctypes.c_uint32):
     message = f'Number of devices detected ({nbr_dev}) not 1'
 
     raise exceptions.ECLibCustomException(-9001, message)
+
+
+def assert_finder_ok(driver: ctypes.WinDLL, return_code: int) -> None:
+    """Checks return code and raises exception if necessary.
+
+    For InstrumentFinder class.
+
+    Args:
+        driver (ctypes.WinDLL): Driver from ECLib function call.
+        return_code (int): Return code from 
+
+    Raises:
+        exceptions.ECLibError: If status is not OK.
+    """
+
+    if return_code == 0:
+        return
+
+    message = _get_error_finder_message(
+        driver=driver, error_code=return_code
+        )
+
+    raise exceptions.BLFindError(return_code, message)
 
 
 def assert_status_ok(driver: ctypes.WinDLL, return_code: int) -> None:
@@ -238,22 +295,26 @@ def parse_potentiostat_search(bytes_string: bytes):
         instrument_type (str): Instrument type, e.g. 'HCP-1005'.
     """
 
-    search_decoded = bytes_string.raw.decode('utf-8')
+    search_decoded = bytes_string.raw.decode()
     search_split = search_decoded.split('$')
     search_parsed = list()
     for item in search_split:
         split = item.split('\x00')
         merged = ''.join(split)
-        
-        if len(merged) ==0:
+
+        if len(merged) == 0:
             continue
 
         search_parsed.append(merged)
 
-    usb_port = search_parsed[0] + search_parsed[1]
-    instrument_type = search_parsed[2]
+    ip_address = search_parsed[1]  # Hakcsarooney
+    instrument_type = search_parsed[-3]
 
-    return usb_port, instrument_type
+    return ip_address, instrument_type
+
+
+def parse_proposed_ip(proposed_ip: str):
+    return f'IP%{proposed_ip}$NM%255.255.255.0$GW%192.109.209.170$'
 
 
 def parse_raw_params(raw_params: dict):  # -> list(dict, str, str):

@@ -4,7 +4,25 @@ import ctypes
 import json
 import typing
 
-from biologic import constants, handler, structures, utils
+from biologic.constants import Device
+from biologic.handler import KBIOData
+from biologic.structures import (
+    DeviceInfos,
+    EccParams,
+    CurrentValues,
+    ChannelInfos,
+    DataInfos
+)
+from biologic.utils import (
+    assert_finder_ok,
+    assert_status_ok,
+    assert_device_type_ok,
+    assert_one_device,
+    parse_potentiostat_search,
+    structure_to_dict,
+    parse_channel_info,
+    parse_proposed_ip
+)
 
 with open('biologic\\config.json', 'r') as f:
     settings = json.load(f)
@@ -66,24 +84,37 @@ class InstrumentFinder:
                 Defaults to 255.
         """
 
-        lst_dev = ctypes.create_string_buffer(bytes_)
+        lst_dev = ctypes.c_buffer(bytes_)
         size = ctypes.c_uint32(bytes_)
         nbr_dev = ctypes.c_uint32(bytes_)
 
-        status = self.driver.BL_FindEChemUsbDev(
+        status = self.driver.BL_FindEChemEthDev(
             ctypes.byref(lst_dev),
             ctypes.byref(size),
             ctypes.byref(nbr_dev)
-            )
+        )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
-        utils.assert_one_device(c_nbr_dev=nbr_dev)
+        assert_finder_ok(driver=self.driver, return_code=status)
+        assert_one_device(c_nbr_dev=nbr_dev)
 
-        self._usb_port, self._instrument_type = utils.parse_potentiostat_search(
+        self._usb_port, self._instrument_type = parse_potentiostat_search(
             bytes_string=lst_dev
-            )
+        )
 
         self.save()
+
+
+    def change_ip(self, incumbent_ip: str, new_ip: str) -> None:
+        # Somehow the incumbent ip is the issue?
+        c_ip = ctypes.c_buffer("192.168.0.1".encode())
+        new_ip_parsed = parse_proposed_ip(proposed_ip=new_ip)
+        cfg = ctypes.c_buffer(new_ip_parsed.encode())
+
+        status = self.driver.BL_SetConfig(
+            ctypes.byref(c_ip), ctypes.byref(cfg)
+        )
+
+        assert_finder_ok(driver=self.driver, return_code=status)
 
 
 class Potentiostat:
@@ -98,7 +129,7 @@ class Potentiostat:
         self._type (str): Potentiostat type.
         self._id (ctypes.c_int32): Potentistat id, passed to all functions
             calling instrument.
-        self._device_info (structures.DeviceInfo):
+        self._device_info (DeviceInfo):
 
     Raises:
         ECLibError: All class class methods use the EC-lib DLL
@@ -143,18 +174,18 @@ class Potentiostat:
             ECLibCustomException: If class instance doesn't match device type.
         """
 
-        address = ctypes.create_string_buffer(usb_port.encode())
+        address = ctypes.c_buffer(usb_port.encode())
         self._id = ctypes.c_int32()
-        self._device_info = structures.DeviceInfos()
+        self._device_info = DeviceInfos()
 
         status = self.driver.BL_Connect(
             ctypes.byref(address), ctypes.c_uint8(timeout),
             ctypes.byref(self._id), ctypes.byref(self._device_info)
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
-        utils.assert_device_type_ok(
+        assert_device_type_ok(
             device_code=self._device_info.DeviceCode,
             reference_device=self._type
             )
@@ -162,12 +193,12 @@ class Potentiostat:
     def load_technique(
         self,
         technique_paths: list[str],
-        c_tecc_params: list[structures.EccParams]
+        c_tecc_params: list[EccParams]
         ) -> None:
         """Load a technique onto the specified channel.
 
         Args:
-            c_technique_params (structures.TEccParams): Structure of
+            c_technique_params (list[EccParams]): Structure of
                 parameters of selected technique. Refer to documentation
                 and module techniques.py for details.
             technique_filename (str): Technique filename w relative path,
@@ -175,6 +206,7 @@ class Potentiostat:
         """
 
         no_techniques = len(technique_paths)
+
         for index, technique_path in enumerate(technique_paths):
 
             first = True if index==0 else False
@@ -190,14 +222,14 @@ class Potentiostat:
                 False,
             )
 
-            utils.assert_status_ok(driver=self.driver, return_code=status)
+            assert_status_ok(driver=self.driver, return_code=status)
 
     def start_channel(self) -> None:
         """Starts technique loaded on channel."""
 
         status = self.driver.BL_StartChannel(self._id, self.channel)
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
     def get_current_values(self) -> dict:
         """Get the current values for the spcified channel.
@@ -206,24 +238,23 @@ class Potentiostat:
             dict: A dict of current values information
         """
 
-        c_current_values = structures.CurrentValues()
+        c_current_values = CurrentValues()
 
         status = self.driver.BL_GetCurrentValues(
             self._id, self.channel, ctypes.byref(c_current_values)
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
-        # Convert the struct to a dict and translate a few values
-        current_values = utils.structure_to_dict(c_current_values)
+        current_values = structure_to_dict(c_current_values)
 
         return current_values
 
-    def get_data(self) -> handler.KBIOData:
+    def get_data(self) -> KBIOData:
         """Get data for the specified channel.
         
         Returns:
-            handler.KBIOData: Class instance (or None if none available.)
+            KBIOData: Class instance (or None if none available.)
         """
 
         # Raw data is retrieved in an array of integers
@@ -231,8 +262,8 @@ class Potentiostat:
         p_data_buffer = ctypes.cast(
             c_databuffer, ctypes.POINTER(ctypes.c_uint32)
             )
-        c_data_infos = structures.DataInfos()
-        c_current_values = structures.CurrentValues()
+        c_data_infos = DataInfos()
+        c_current_values = CurrentValues()
 
         status = self.driver.BL_GetData(
             self._id,
@@ -242,11 +273,11 @@ class Potentiostat:
             ctypes.byref(c_current_values),
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
         # The KBIOData will ask the appropriate techniques for which data
         # fields they return data in
-        data = handler.KBIOData(
+        data = KBIOData(
             c_databuffer, c_data_infos, c_current_values, self
             )
 
@@ -260,14 +291,14 @@ class Potentiostat:
 
         status = self.driver.BL_StopChannel(self._id, self.channel)
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
     def disconnect(self) -> None:
         """Disconnects from device."""
 
         status = self.driver.BL_Disconnect(self._id)
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
         self._id = None
         self._device_info = None
@@ -319,10 +350,8 @@ class Config(Potentiostat):
         if self._device_info is None:
             return None
 
-        out = utils.structure_to_dict(self._device_info)
-        out['DeviceCode(translated)'] = constants.Device(
-            out['DeviceCode']
-            ).value
+        out = structure_to_dict(self._device_info)
+        out['DeviceCode(translated)'] = Device(out['DeviceCode']).value
 
         return out
 
@@ -339,16 +368,16 @@ class Config(Potentiostat):
                 keys for those values are suffixed by (translated).
         """
 
-        c_channel_info = structures.ChannelInfos()
+        c_channel_info = ChannelInfos()
 
         self.driver.BL_GetChannelInfos(
             self._id, self.channel, ctypes.byref(c_channel_info)
             )
 
-        channel_info = utils.structure_to_dict(
+        channel_info = structure_to_dict(
             structure=c_channel_info
             )
-        channel_info_parsed = utils.parse_channel_info(
+        channel_info_parsed = parse_channel_info(
             channel_info=channel_info
             )
 
@@ -368,7 +397,7 @@ class Config(Potentiostat):
             self._id, pstatus, no_channels
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
         return [result == 1 for result in status_]
 
@@ -383,7 +412,7 @@ class Config(Potentiostat):
             ctypes.byref(c_opt_pos)
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
     def is_channel_plugged(self) -> bool:
         """Test if the selected channel is plugged.
@@ -410,16 +439,17 @@ class Config(Potentiostat):
         """
 
         size = ctypes.c_uint32(255)
-        message = ctypes.create_string_buffer(255)
+        message = ctypes.c_buffer(255)
 
         status = self.driver.BL_GetMessage(
             self._id, self.channel, ctypes.byref(message),
             ctypes.byref(size)
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
         return message.value.decode()
+
 
     def load_firmware(
         self,
@@ -460,10 +490,10 @@ class Config(Potentiostat):
             )
 
         bin_file: str = DRIVERPATH + kernel
-        c_bin_file = ctypes.create_string_buffer(bin_file.encode())
+        c_bin_file = ctypes.c_buffer(bin_file.encode())
 
         xlx_file: str = DRIVERPATH + xlx
-        c_xlx_file = ctypes.create_string_buffer(xlx_file.encode())
+        c_xlx_file = ctypes.c_buffer(xlx_file.encode())
 
         status = self.driver.BL_LoadFirmware(
             self._id, p_channels, ctypes.byref(c_results),
@@ -471,7 +501,7 @@ class Config(Potentiostat):
             ctypes.byref(c_bin_file), ctypes.byref(c_xlx_file)
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
         return list(c_results)
 
@@ -480,7 +510,7 @@ class Config(Potentiostat):
 
         status = self.driver.BL_TestConnection(self._id)
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
     def test_communication_speed(self) -> typing.List[str]:
         """Tests communication speed between computer and instrument.
@@ -497,7 +527,7 @@ class Config(Potentiostat):
             ctypes.byref(c_spd_kernel)
             )
 
-        utils.assert_status_ok(driver=self.driver, return_code=status)
+        assert_status_ok(driver=self.driver, return_code=status)
 
         # print(
         #     'communication speed between library and device:',

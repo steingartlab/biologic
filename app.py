@@ -36,8 +36,7 @@ def configure_routes(app):
     # Runs resonance
     @app.route('/run', methods=['POST'])
     def run():
-        """This is where the magic happens.
-        """
+        """This is where the magic happens."""
 
         if 'experiment_' not in globals():
             global experiment_
@@ -46,14 +45,13 @@ def configure_routes(app):
         if experiment_.status == 'running':
             return "Aborted: Experiment already running"
 
-        global pill, potentiostat
+        global pill, potentiostat, thread
 
         pill = Event()  # kills thread when called
         potentiostat = HCP1005()
 
         params = flask.request.json
 
-        global thread
         thread = Thread(target=experiment.run,
                args=(potentiostat, params, pill, experiment_))
 
@@ -75,13 +73,15 @@ def configure_routes(app):
     def stop():
         """A big, fat, virtual emergency stop button.
         
-        Does two things:
+        Does three things:
             (1) Stops the running technique.
             (2) Stops data logging.
+            (3) Sets status to 'stopped'.
         """
 
         potentiostat.stop_channel()
         pill.set()
+        experiment_.set_status('stopped')
 
         return "Technique stopped"
 
@@ -92,7 +92,12 @@ def configure_routes(app):
 
     @app.route('/block')
     def block():
-        """Only for testing purposes."""
+        """Only for testing purposes.
+        
+        Precludes other tests from proceeding before
+        the previous is finished.
+        """
+
         if 'thread' not in globals():
             return "Thread nonexistent"
         

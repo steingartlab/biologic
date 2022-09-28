@@ -31,7 +31,7 @@ def driver() -> ctypes.WinDLL:
 def test_get_error_message(driver: ctypes.WinDLL):
     message = utils._get_error_message(driver=driver, error_code=-2)
 
-    assert message.decode() == "connection in progress"
+    assert "connection in progress" in message
 
 
 def test_assert_device_type_ok():
@@ -125,7 +125,6 @@ def test_parse_raw_params():
         )
 
     assert isinstance(parsed_steps, list)
-    assert parsed_steps[0]['Record_every_dT'] == 1.0
     assert tecc_ecc_path[0] == dummy_tecc_ecc_path
     assert exp_id == dummy_exp_id
 

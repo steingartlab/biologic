@@ -49,7 +49,6 @@ def pill():
 
     return pill
 
-
 def test_run(potentiostat_: HCP1005, pill: Event, experiment_: Experiment):
     """Very minimalistic. More nuanced tests in test_app.py"""
 

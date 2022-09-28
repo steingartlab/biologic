@@ -50,29 +50,27 @@ import requests
 ip = '0.0.0.0'
 port = '5001'
 
-params = {
+cparams = {
     'exp_id': 'brix2/test/test',
     'steps':{
         'OCV1':{
             'Rest_time_T': 3.0,
-            'Record_every_dT': 1.0,
         },
         'CPLIMIT':{
             'Current_step': -1.0,
             'N_Cycles': 0,
             'Step_number': 0,
             'Duration_step': 3.0,
-            'Record_every_dT': 1.0,
-            'Test1_Config': 1,
-            'Test1_Value': 2.7,
+            'Voltage_limit': 2.7,
             'Exit_Cond': 1
         },
         'OCV2':{
             'Rest_time_T': 3.0,
-            'Record_every_dT': 1.0,
         },
         'LOOP':{
-            'loop_N_times': 2,
+            # loop_N_times=1 means repeat loop once, i.e. do two loops total.
+            'loop_N_times': 1,
+            # Equivalent to go to technique no 0 (zero-based)
             'protocol_number': 0
         }
     }

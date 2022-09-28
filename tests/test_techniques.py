@@ -22,6 +22,14 @@ def test_generate_c_value_int():
     assert isinstance(c_value, ctypes.c_int32)
 
 
+def test_set_voltage_limit():
+
+    config_limit, voltage_limit = techniques._set_voltage_limit(voltage=3.1)
+
+    assert isinstance(config_limit, EccParam)
+    assert isinstance(voltage_limit, EccParam)
+
+
 def test_generate_c_value_bool():
     c_value = techniques._generate_c_value(value=dummy_bool)
 
