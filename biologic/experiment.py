@@ -24,7 +24,7 @@ usb_port = settings['usb_port']
 class Experiment:
 
     def __init__(self):
-        self._status = 'stopped'
+        self._status = 'stopped'   
 
     @property
     def status(self):
@@ -63,8 +63,8 @@ def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: 
 
     try:
         while experiment_.status == 'running' and not pill.wait(1):
-            current_values = potentiostat.get_current_values()
-            payload = parse_payload(raw_data=current_values)
+            data_infos, current_values = potentiostat.get_data()
+            payload = parse_payload(raw_data=current_values, raw_metadata=data_infos)
             db.write(payload=payload, table='biologic')
             experiment_.check_status(state=current_values['State'])
 

@@ -5,7 +5,6 @@ import json
 import typing
 
 from biologic.constants import Device
-from biologic.handler import KBIOData
 from biologic.structures import (
     DeviceInfos,
     EccParams,
@@ -233,6 +232,9 @@ class Potentiostat:
 
     def get_current_values(self) -> dict:
         """Get the current values for the spcified channel.
+
+        Does not include metadata like cycle number so is depreciated.
+        Use get_data.
         
         Returns:
             dict: A dict of current values information
@@ -250,11 +252,15 @@ class Potentiostat:
 
         return current_values
 
-    def get_data(self) -> KBIOData:
+    def get_data(self) -> tuple[dict, dict]:
         """Get data for the specified channel.
+
+        Preferred over get_current_values as this one includes metadata.
         
         Returns:
-            KBIOData: Class instance (or None if none available.)
+            data_infos (dict): Metadata, most importantly cycle number
+                (loop number).
+            current_values (dict): Current values like time, Ewe and I.
         """
 
         # Raw data is retrieved in an array of integers
@@ -275,16 +281,10 @@ class Potentiostat:
 
         assert_status_ok(driver=self.driver, return_code=status)
 
-        # The KBIOData will ask the appropriate techniques for which data
-        # fields they return data in
-        data = KBIOData(
-            c_databuffer, c_data_infos, c_current_values, self
-            )
+        data_infos = structure_to_dict(c_data_infos)
+        current_values = structure_to_dict(c_current_values)
 
-        if data.technique == 'KBIO_TECHID_NONE':
-            data = None
-
-        return data
+        return data_infos, current_values
 
     def stop_channel(self) -> None:
         """Stops technique loaded on channel."""

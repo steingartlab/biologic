@@ -46,7 +46,6 @@ cp_params = {
             }
     }
 
-
 dummy_raw_data = {
     'State': 0,
     'MemFilled': 0,
@@ -67,6 +66,16 @@ dummy_raw_data = {
     'Saturation': 0
     }
 
+dummy_metadata = {
+    'IRQskipped': 0,
+    'NbRaws': 1,
+    'NbCols': 4,
+    'TechniqueIndex': 0,
+    'TechniqueID': 100,
+    'ProcessIn--- dex': 0,
+    'loop': 0,
+    'StartTime': 0.0
+    }
 
 # Matches the return string format when searching for connected potentiostats.
 # See section 5.1 in documentation for details.

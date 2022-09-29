@@ -3,7 +3,7 @@ import json
 import pytest
 
 from biologic import exceptions, utils
-from tests.params import cp_params, dummy_raw_data, dummy_bytes_string
+from tests.params import cp_params, dummy_raw_data, dummy_bytes_string, dummy_metadata
 
 with open('biologic/config.json') as f:
     config = json.load(f)
@@ -97,11 +97,14 @@ def test_parse_potentiostat_search(
 
 
 def test_parse_payload():
-    payload = utils.parse_payload(raw_data=dummy_raw_data)
+    payload = utils.parse_payload(
+        raw_data=dummy_raw_data,
+        raw_metadata=dummy_metadata
+    )
 
     assert isinstance(payload, dict)
     assert payload['Ewe'] == dummy_voltage
-    assert len(payload) == 3
+    assert len(payload) == 4
 
 
 @pytest.fixture

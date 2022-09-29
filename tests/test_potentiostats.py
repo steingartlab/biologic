@@ -119,10 +119,10 @@ def test_successful_finding(finding_instance: InstrumentFinder):
     assert isinstance(usb_port, ipaddress.IPv4Address)
 
 
-def test_change_ip(finding_instance: InstrumentFinder):
-    finding_instance.change_ip(
-        incumbent_ip=usb_port, new_ip='192.109.209.22'
-        )
+# def test_change_ip(finding_instance: InstrumentFinder):
+#     finding_instance.change_ip(
+#         incumbent_ip=usb_port, new_ip='192.109.209.22'
+#         )
 
 
 def test_get_error_status(config: Config):
@@ -205,8 +205,11 @@ def test_stop_channel(started_channel: HCP1005):
     started_channel.stop_channel()
 
 
-# def test_get_data(started_channel: potentiostats.HCP1005):
-#     something = started_channel.get_data()
+def test_get_data(started_channel: HCP1005):
+    data_infos, current_values = started_channel.get_data()
+
+    assert isinstance(data_infos, dict)
+    assert isinstance(current_values, dict)
 
 
 def test_disconnect(connection: HCP1005):

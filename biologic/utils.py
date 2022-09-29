@@ -262,23 +262,34 @@ def parse_channel_info(channel_info: dict) -> dict:
 
 def parse_payload(
     raw_data: dict,
-    desired_keys: list = ['Ewe', 'I', 'ElapsedTime']
+    raw_metadata: dict,
+    desired_keys: list = ['Ewe', 'I', 'ElapsedTime', 'loop'],
+    meta_key: str = 'loop'
     ) -> dict:
     parsed_data = dict()
     """Parses data from instrument before it's dumped to db.
 
     Args:
         raw_data (dict): Raw data from instrument.
+        raw_metadata (dict): Raw metadata from instrument
+            (e.g. loop number).
         desired_keys (list, optional): Keys we want in payload.
-            Defaults to ['Ewe', 'I', 'ElapsedTime']
+            Defaults to ['Ewe', 'I', 'ElapsedTime'].
+        meta_key (str, optional): The raw key denoting cycle number.
+            Defaults to 'loop'.
 
     Returns:
         dict: Payload.
     """
 
     for desired_key in desired_keys:
-        parsed_data[desired_key] = raw_data[desired_key]
 
+        if desired_key == meta_key:
+            parsed_data['cycle'] = raw_metadata[meta_key]
+            continue
+
+        parsed_data[desired_key] = raw_data[desired_key]
+    print(parsed_data)
     return parsed_data
 
 
