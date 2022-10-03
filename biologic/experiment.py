@@ -3,11 +3,14 @@ import logging
 import os
 from threading import Event
 
+from biologic.config import slack_user_id, slack_channel_url
 from biologic.constants import State
 from biologic.database import Database
 from biologic.potentiostats import Potentiostat
+from biologic import slackbot
 from biologic.techniques import set_technique_params
 from biologic.utils import parse_raw_params, parse_payload
+
 
 log_filename = "logs/logs.log"
 os.makedirs(os.path.dirname(log_filename), exist_ok=True)
@@ -24,12 +27,12 @@ usb_port = settings['usb_port']
 class Experiment:
 
     def __init__(self):
-        self._status = 'stopped'   
+        self._status = 'stopped'
 
     @property
     def status(self):
         return self._status
-    
+
     def set_status(self, status: str):
         self._status = status
 
@@ -71,3 +74,11 @@ def run(potentiostat: Potentiostat, raw_params: dict, pill: Event, experiment_: 
     except Exception as e:
         pill.set()
         logging.error(e)
+
+    finally:
+        message = f'experiment {raw_params["exp_id"]} finished'
+        slackbot.post(
+            message=message,
+            user_id=slack_user_id,
+            url=slack_channel_url
+            )
