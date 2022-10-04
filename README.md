@@ -16,7 +16,7 @@ There are three main reasons for preferring programmatic control over a GUI:
 
 ### 1. Data Automation
 
-We cycle a lot of cells. Like, a lot. As such, we have a lot of data. Time is a valuable commodity and we'd rather spend our time gaining insights from our experiments, rather than spending it manually uploading to our server ([drops](https://github.com/dansteingart/drops)).
+We cycle a lot of cells. Like, a lot. As such, we have a lot of data. Time is a valuable commodity and we'd rather spend our time gaining insights from our experiments, than spending it manually uploading to our server ([drops](https://github.com/dansteingart/drops)).
 
 Sometimes the OEM doesn't provide an SDK/API, in which case we must resort to scrapers. BioLogic _does_ provide one. They even provide a suite of minimal examples in their [documentation](https://www.biologic.net/support-software/ec-lab-oem-development-package/) to get one started (requires login).
 
@@ -34,12 +34,10 @@ A couple of thousand lines of code might at first glance seem like just an added
 
 ## Technical Details
 
-This library _can_ be run as a standalone application but is actually optimized to be run containerized.
-
-This only runs on Windows. I know, I know. It's just a design choice by BioLogic. Nothing is perfect. _TODO: There is a way around that though, albeit a little hacky. To be able to run it as a standalone container it is run as a [Wine](https://www.winehq.org/) compatibility layer._
+This library _can_ be run as a standalone application but is actually optimized to be run containerized. To be able to run it as a standalone container it is run as a [Wine](https://www.winehq.org/) compatibility layer._
 
 
-It uses the `http` protocol to receive commands (simple, robust, little overhead) and `mqtt` to submit relay data (great when cache-ing is needed).
+It uses the `http` protocol to receive commands (simple, robust, little overhead) and `mqtt` to submit relay data.
 
 
 ## Example
