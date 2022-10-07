@@ -22,7 +22,9 @@ Sometimes the OEM doesn't provide an SDK/API, in which case we must resort to sc
 
 ### 2. Syncing Instruments
 
-Oftentimes in our experiments we want to do something in tandem with cell cycling, e.g. [acoustics](https://github.com/steingartlab/acoustics_hardware), control temperature or apply variable stack pressure. Then it becomes very useful—almost necessary—to be able to programatically control these different systems in one place (e.g. proftron Dan's [pithy](https://github.com/dansteingart/pithy)) to have one event trigger another.
+Oftentimes in our experiments we want to do something in tandem with cell cycling, e.g. [acoustics](https://github.com/steingartlab/acoustics_hardware), control temperature, apply variable stack pressure, or do calorimetry. Then it becomes very useful—almost necessary—to be able to programatically control these different systems in one place (e.g. proftron Dan's [pithy](https://github.com/dansteingart/pithy)) to have one event trigger another.
+
+Even if highly granular temporal triggering is not needed, having data from different sources in a timestamped database makes one's life that little bit easier.
 
 This is probably best illustrated with an example.
 
