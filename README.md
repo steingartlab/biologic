@@ -41,8 +41,7 @@ This library _can_ be run as a standalone application but is actually optimized 
 
 It uses the `http` protocol to receive commands (simple, robust, little overhead) and `mqtt` to submit relay data.
 
-![System Flowchart](https://imgur.com/20vUyOu)
-
+<blockquote class="imgur-embed-pub" lang="en" data-id="a/20vUyOu" data-context="false" ><a href="//imgur.com/a/20vUyOu"></a></blockquote><script async src="//s.imgur.com/min/embed.js" charset="utf-8"></script>
 
 
 ## Example
