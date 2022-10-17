@@ -41,7 +41,7 @@ This library _can_ be run as a standalone application but is actually optimized 
 
 It uses the `http` protocol to receive commands (simple, robust, little overhead) and `mqtt` to submit relay data.
 
-![System Flowchart](https://imgur.com/a/Yop7ILB)
+![System Flowchart](https://imgur.com/20vUyOu)
 
 
 
