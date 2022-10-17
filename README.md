@@ -78,6 +78,8 @@ cparams = {
 
 response = requests.post(f'http://{ip}:{port}/run', timeout=3, json=params)
 
+![System Flowchart](https://imgur.com/a/Yop7ILB)
+
 ```
 
 ### Disclaimer
