@@ -32,7 +32,7 @@ class Database:
         self.client.connect(host=host, port=port, keepalive=3600)
         self.client.loop_start()
 
-        self.url = f'{drops_prefix}/{path}/'
+        self.url = f'{drops_prefix}/{path}/{path}/'
 
     def write(self, payload: dict, table: str = 'table') -> MQTTMessageInfo:
         """Writes data out to data.ceec.echem.io, a.k.a. drops.
